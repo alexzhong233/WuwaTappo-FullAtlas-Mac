@@ -77,8 +77,8 @@ export function patchMacAbout(source, region = 'CN') {
   if (remotes.length !== 1) throw new Error('Original remote About content changed; reconcile the Mac build information before building.');
   const [remote, computed] = remotes[0];
   const info = region === 'GLOBAL'
-    ? `<h2 ${scope}>macOS community build</h2><p ${scope}>Wuwa Tappo Global Mac · Unofficial · Apple Silicon · macOS 13+</p>`
-    : `<h2 ${scope}>macOS 全图鉴整合版</h2><p ${scope}>WuwaTappo FullAtlas Mac · 非官方重建 · Apple Silicon · macOS 13 及以上</p>`;
+    ? `<h2 ${scope}>macOS community build</h2><p ${scope}>WuwaTappo Global Community · Unofficial · Apple Silicon · macOS 13+</p>`
+    : `<h2 ${scope}>macOS 全图鉴整合版</h2><p ${scope}>WuwaTappo Full Community · 非官方重建 · Apple Silicon · macOS 13 及以上</p>`;
   const banner = `<section class="about-section" ${scope}>${info}</section>`;
   return source
     .replace(original, `${info}<h3 ${scope}>Windows 原版系统配置</h3>`)

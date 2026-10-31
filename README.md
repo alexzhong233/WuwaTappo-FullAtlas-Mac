@@ -1,10 +1,10 @@
-# WuwaTappo FullAtlas Mac
+# WuwaTappo Full Community
 
 > `main` 已合入官方国服 **1.0.3** 适配，整合版为 **1.2.2-alpha.1**。`dev` 从 `main` 派生，CI 成功后会自动更新滚动开发版；正式版本仍通过 `v*` 标签发布。详见 [1.0.3 适配记录](docs/OFFICIAL_1.0.3.md)。
 
-让《鸣潮》桌宠在 Mac 上运行，并在原有面板中加入本地全图鉴和桌面助手。
+让《鸣潮》桌宠在 macOS 和 Windows 上运行，并在原有面板中加入本地全图鉴和桌面助手。
 
-基于 [wuwa-tappo-mac](https://github.com/Last-emo-boy/wuwa-tappo-mac) 的 Rust / Tauri macOS 后端，以及 [WuwaTappo-FullAtlas](https://github.com/Averionx/WuwaTappo-FullAtlas) 的图鉴和助手功能开发。无需 Windows、Wine 或虚拟机。本项目为非官方社区整合版，与库洛官方及两个上游项目的发行渠道独立。
+基于 [wuwa-tappo-mac](https://github.com/Last-emo-boy/wuwa-tappo-mac) 的 Rust / Tauri macOS 后端，以及 [WuwaTappo-FullAtlas](https://github.com/Averionx/WuwaTappo-FullAtlas) 的图鉴和助手功能开发。macOS 侧无需 Windows、Wine 或虚拟机；Windows 侧直接给官方客户端打补丁，不需要重写。本项目为非官方社区整合版，与库洛官方及两个上游项目的发行渠道独立。
 
 ## 平台
 
@@ -52,6 +52,7 @@ Windows 侧版本由 `windows/upstream-win.json` 锁定，不会因为官方发�
 | 整合版本 | 1.2.2-alpha.1 实验版，基于官方国服 1.0.3 与 FullAtlas v1.2 |
 | 分支 | `main` 为 1.0.3 基底，两个平台同仓共用；`dev` 用于开发版；`official-1.0.3` 保留为历史适配分支 |
 | 验证 | 自动测试、原生构建、签名与 ZIP / DMG 校验通过；角色和设置面板可显示，完整业务仍需实机验收 |
+| 应用标识 | 沿用 `dev.w33d.wuwatappo.fullatlas.mac`，改名只动显示名与产物名，既有数据目录和钥匙串不受影响 |
 | 签名 | Ad hoc 临时签名，未通过 Apple 公证 |
 
 ## 功能
@@ -64,11 +65,13 @@ Windows 侧版本由 `windows/upstream-win.json` 锁定，不会因为官方发�
 - 本地图鉴开启时阻止联机房间，以及会把本地外观、收藏或合成写回账号的请求；关闭后恢复普通账号视图。
 - 可联网同步公开图鉴目录。图片仍依赖官方素材 CDN，**不是完整离线资源包**。
 
-## 安装与使用
+## 安装与使用（macOS）
 
-发布后在本仓库的 **Releases** 中下载 `WuwaTappo-FullAtlas-Mac-版本-arm64.dmg`，将应用拖入「应用程序」。ZIP 与 DMG 内的应用相同，只需选一个。
+> Windows 侧的安装、运行与管理见 [windows/README.md](windows/README.md)。两侧产物不通用，不要混用安装包。
 
-1. 打开 `WuwaTappo FullAtlas Mac.app`。如系统拦截，请在确认来源后到「系统设置 → 隐私与安全性」选择「仍要打开」，无需关闭系统安全保护。
+发布后在本仓库的 **Releases** 中下载 `WuwaTappo-Full-Community-版本-arm64.dmg`，将应用拖入「应用程序」。ZIP 与 DMG 内的应用相同，只需选一个。
+
+1. 打开 `WuwaTappo Full Community.app`。如系统拦截，请在确认来源后到「系统设置 → 隐私与安全性」选择「仍要打开」，无需关闭系统安全保护。
 2. 首次启动可选「仅本次会话」或「记住登录」。前者将登录信息保存在内存，后者使用 macOS 钥匙串。
 3. 要响应全局键鼠输入，请在「隐私与安全性 → 输入监控」中授权应用，并按系统提示重启。
 4. 在设置中切换「本地全图鉴」，通过「挂机与统计」打开助手面板。首次使用请先验收普通登录和图鉴显示，再启用自动任务。

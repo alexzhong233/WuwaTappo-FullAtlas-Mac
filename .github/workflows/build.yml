@@ -22,7 +22,7 @@ jobs:
       matrix:
         include:
           - region: cn
-            artifact: FullAtlas
+            artifact: Full-Community
     env:
       WUWA_REGION: ${{ matrix.region }}
       WUWA_INSTALLER_MIRROR_BASE: ${{ github.server_url }}/${{ github.repository }}/releases/download/upstream-resources
@@ -92,7 +92,7 @@ jobs:
           retention-days: 14
       - uses: actions/upload-artifact@v4
         with:
-          name: WuwaTappo-${{ matrix.artifact }}-Mac-arm64
+          name: WuwaTappo-${{ matrix.artifact }}-arm64
           path: |
             dist/*.zip
             dist/*.dmg

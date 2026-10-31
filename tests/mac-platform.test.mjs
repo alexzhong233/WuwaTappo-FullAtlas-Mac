@@ -200,8 +200,8 @@ test('unreadable input status is not reported as granted or running', async () =
 });
 
 test('input permission guidance names the current GLOBAL application', async () => {
-  const view = webview({ readyState: 'complete', profile: { productName: 'Wuwa Tappo Global Mac' } });
+  const view = webview({ readyState: 'complete', profile: { productName: 'WuwaTappo Global Community' } });
   await drain();
-  assert.match(view.warning(), /Wuwa Tappo Global Mac/);
+  assert.match(view.warning(), /WuwaTappo Global Community/);
   assert.doesNotMatch(view.warning(), /CN Mac/);
 });

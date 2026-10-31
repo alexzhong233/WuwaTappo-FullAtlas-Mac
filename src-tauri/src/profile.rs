@@ -22,8 +22,8 @@ impl Region {
 
     pub fn name(self) -> &'static str {
         match self {
-            Self::Cn => "WuwaTappo FullAtlas Mac",
-            Self::Global => "Wuwa Tappo Global Mac",
+            Self::Cn => "WuwaTappo Full Community",
+            Self::Global => "WuwaTappo Global Community",
         }
     }
 

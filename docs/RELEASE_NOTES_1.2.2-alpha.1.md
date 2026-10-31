@@ -1,4 +1,4 @@
-# WuwaTappo FullAtlas Mac 1.2.2-alpha.1
+# WuwaTappo Full Community 1.2.2-alpha.1
 
 基于官方国服 **1.0.3** 的 Mac 实验适配，面向 Apple Silicon / macOS 13 及以上。
 

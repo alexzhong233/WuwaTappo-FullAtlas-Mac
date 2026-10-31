@@ -40,7 +40,7 @@ jobs:
           pattern: WuwaTappo-*
           merge-multiple: true
           path: dist
-      - name: Create draft FullAtlas release
+      - name: Create draft Full Community release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -50,7 +50,7 @@ jobs:
           set -euo pipefail
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+)?$ ]]
           for EXT in zip dmg; do
-            PACKAGES=(dist/WuwaTappo-FullAtlas-Mac-*-arm64."$EXT")
+            PACKAGES=(dist/WuwaTappo-Full-Community-*-arm64."$EXT")
             [[ ${#PACKAGES[@]} -eq 1 && -f "${PACKAGES[0]}" ]]
           done
           # Windows 产物为可选：历史 tag 或 Windows 构建失败时仍能发 Mac 版
@@ -66,14 +66,14 @@ jobs:
           const official = JSON.parse(readFileSync('upstream-cn.json', 'utf8')).version;
           if (process.env.TAG !== `v${version}`) throw new Error('Tag does not match integration version');
           for (const ext of ['zip', 'dmg']) {
-            if (!existsSync(`dist/WuwaTappo-FullAtlas-Mac-${version}-arm64.${ext}`)) {
+            if (!existsSync(`dist/WuwaTappo-Full-Community-${version}-arm64.${ext}`)) {
               throw new Error('Release artifact version does not match source');
             }
           }
           const notes = `docs/RELEASE_NOTES_${version}.md`;
           const body = existsSync(notes)
             ? readFileSync(notes, 'utf8')
-            : `# WuwaTappo FullAtlas Mac ${version}\n\n官方国服基底 ${official}，Apple Silicon / macOS 13 及以上。实验预发布，完整业务仍需验收。\n`;
+            : `# WuwaTappo Full Community ${version}\n\n官方国服基底 ${official}，Apple Silicon / macOS 13 及以上。实验预发布，完整业务仍需验收。\n`;
           writeFileSync('/tmp/release-notes.md', `${body}\n\n官方资源版本：${official}。此 Release 保持草稿，待维护者验收后手动发布。\n`);
           NODE
           # 收集产物：mac 的 zip/dmg 必须存在，Windows zip 与校验和按需追加
@@ -84,5 +84,5 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "${FILES[@]}" --clobber
           else
-            gh release create "$TAG" "${FILES[@]}" --verify-tag --title "WuwaTappo FullAtlas $TAG" --notes-file /tmp/release-notes.md --draft --prerelease
+            gh release create "$TAG" "${FILES[@]}" --verify-tag --title "WuwaTappo Full Community $TAG" --notes-file /tmp/release-notes.md --draft --prerelease
           fi

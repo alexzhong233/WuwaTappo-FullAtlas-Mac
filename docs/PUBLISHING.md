@@ -2,7 +2,7 @@
 
 ## 创建仓库并上传源码
 
-在 GitHub 创建空仓库，建议名称 `WuwaTappo-FullAtlas-Mac`。不要勾选自动生成 README、License 或 .gitignore，本地已包含这些文件。复制 GitHub 显示的仓库 URL，并在项目根目录执行：
+在 GitHub 创建空仓库，建议名称 `WuwaTappo-Full-Community`。不要勾选自动生成 README、License 或 .gitignore，本地已包含这些文件。复制 GitHub 显示的仓库 URL，并在项目根目录执行：
 
 ```bash
 git remote add origin <你的仓库URL>
@@ -55,6 +55,6 @@ Release 工作流构建 ZIP / DMG 后创建 **Draft / Pre-release**，不会直�
 
 该分支整合版版本号为 **1.2.2-alpha.1**，适配内容和待验收项见 [实验记录](OFFICIAL_1.0.3.md)。当前适配已合入 `main`，`dev` 也从该基底持续构建。
 
-本地安装包为 `release-assets/WuwaTappo-FullAtlas-Mac-1.2.2-alpha.1-arm64.zip` 和同名 `.dmg`。可以在 GitHub Releases 中手动创建 `v1.2.2-alpha.1`，目标选 `official-1.0.3`，勾选 **Pre-release** 并先保存草稿，再上传这两个附件。不要把它标记为稳定最新版。
+本地安装包为 `release-assets/WuwaTappo-Full-Community-1.2.2-alpha.1-arm64.zip` 和同名 `.dmg`。可以在 GitHub Releases 中手动创建 `v1.2.2-alpha.1`，目标选 `official-1.0.3`，勾选 **Pre-release** 并先保存草稿，再上传这两个附件。不要把它标记为稳定最新版。
 
-`dev` 分支每次 CI 成功后会自动更新 [dev 预发布](https://github.com/alexzhong233/WuwaTappo-FullAtlas-Mac/releases/tag/dev)。正式发布时从 `main` 或经过验收的提交创建 `v*` 标签；Release 工作流会创建带 ZIP / DMG 的草稿预发布，维护者确认后点击 Publish.
+`dev` 分支每次 CI 成功后会自动更新 [dev 预发布](https://github.com/alexzhong233/WuwaTappo-Full-Community/releases/tag/dev)。正式发布时从 `main` 或经过验收的提交创建 `v*` 标签；Release 工作流会创建带 ZIP / DMG 的草稿预发布，维护者确认后点击 Publish.

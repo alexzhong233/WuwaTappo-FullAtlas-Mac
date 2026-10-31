@@ -1,4 +1,4 @@
-# WuwaTappo FullAtlas Mac 1.2.1 预览版
+# WuwaTappo Full Community 1.2.1 预览版
 
 将 Wuwa Tappo Mac 原生适配与 FullAtlas v1.2 集成，当前使用官方国服 **1.0.2**。适用于 Apple Silicon、macOS 13 及以上。
 

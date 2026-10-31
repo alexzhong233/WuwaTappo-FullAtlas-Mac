@@ -1,8 +1,8 @@
 ﻿<#
   把装配好的 app\ 打成可分发 zip
 
-  产物： dist\WuwaTappo-FullAtlas-Windows-x64-<version>.zip
-         dist\WuwaTappo-FullAtlas-Windows-x64-<version>.zip.sha256
+  产物： dist\WuwaTappo-Full-Community-Windows-x64-<version>.zip
+         dist\WuwaTappo-Full-Community-Windows-x64-<version>.zip.sha256
 
   版本号取自仓库根的 package.json（与 macOS 产物保持一致）。
 
@@ -33,7 +33,7 @@ if (-not $Source) { $Source = Join-Path $Root 'app' }
 if (-not $OutDir) { $OutDir = Join-Path $RepoRoot 'dist' }
 
 $version = (Get-Content -LiteralPath (Join-Path $RepoRoot 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json).version
-$name = "WuwaTappo-FullAtlas-Windows-x64-$version"
+$name = "WuwaTappo-Full-Community-Windows-x64-$version"
 $zip = Join-Path $OutDir "$name.zip"
 
 if (-not (Test-Path -LiteralPath $Source)) { throw "找不到待打包目录：$Source（先跑 build.ps1 / deploy.ps1）" }

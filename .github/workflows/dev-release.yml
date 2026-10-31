@@ -37,10 +37,10 @@ jobs:
           set -euo pipefail
           rm -rf dist
           mkdir -p dist
-          gh run download "$RUN_ID" --repo "$GH_REPO" --name WuwaTappo-FullAtlas-Mac-arm64 --dir dist
-          MAC=(dist/WuwaTappo-FullAtlas-Mac-*-arm64.zip dist/WuwaTappo-FullAtlas-Mac-*-arm64.dmg)
+          gh run download "$RUN_ID" --repo "$GH_REPO" --name WuwaTappo-Full-Community-arm64 --dir dist
+          MAC=(dist/WuwaTappo-Full-Community-*-arm64.zip dist/WuwaTappo-Full-Community-*-arm64.dmg)
           [[ ${#MAC[@]} -eq 2 && -f "${MAC[0]}" && -f "${MAC[1]}" ]]
-          if gh run download "$RUN_ID" --repo "$GH_REPO" --name WuwaTappo-FullAtlas-Windows-x64 --dir dist; then
+          if gh run download "$RUN_ID" --repo "$GH_REPO" --name WuwaTappo-Full-Community-Windows-x64 --dir dist; then
             ls -la dist/*Windows-x64*
           else
             echo "::warning::Windows 产物缺失，本次 dev 发布仅含 macOS"
@@ -55,7 +55,7 @@ jobs:
           OFFICIAL_WIN=$(node -p "require('./windows/upstream-win.json').client_version")
           SHORT_SHA="${HEAD_SHA:0:12}"
           cat > /tmp/dev-release-notes.md <<EOF
-          # WuwaTappo FullAtlas Dev
+          # WuwaTappo Full Community Dev
 
           自动构建版本：${VERSION}
           官方国服资源：${OFFICIAL}
@@ -72,13 +72,13 @@ jobs:
           if gh release view "$TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
             gh release upload "$TAG" "${FILES[@]}" --repo "$GH_REPO" --clobber
             gh release edit "$TAG" --repo "$GH_REPO" \
-              --title "WuwaTappo FullAtlas Dev (${SHORT_SHA})" \
+              --title "WuwaTappo Full Community Dev (${SHORT_SHA})" \
               --notes-file /tmp/dev-release-notes.md \
               --prerelease --latest=false
           else
             gh release create "$TAG" "${FILES[@]}" --repo "$GH_REPO" \
               --target "$HEAD_SHA" \
-              --title "WuwaTappo FullAtlas Dev (${SHORT_SHA})" \
+              --title "WuwaTappo Full Community Dev (${SHORT_SHA})" \
               --notes-file /tmp/dev-release-notes.md \
               --prerelease --latest=false
           fi

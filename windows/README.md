@@ -1,4 +1,4 @@
-# WuwaTappo FullAtlas — Windows 侧
+# WuwaTappo Full Community — Windows 侧
 
 这个目录是本仓库的 Windows 平台实现。和 macOS 侧**不是同一套机制**，先看区别再动手：
 

@@ -67,7 +67,7 @@ test('traditional Chinese remote About requirements remain identified as Windows
     f: callback => callback(), k: () => true,
     v: () => '<h2>系統配備</h2><p>Windows 10 / Windows 11 64位元</p>',
   });
-  assert.ok(result.includes('Wuwa Tappo Global Mac'));
+  assert.ok(result.includes('WuwaTappo Global Community'));
   assert.ok(result.includes('<h2>Windows 原版系統配備</h2>'));
   assert.ok(result.includes('Windows 10 / Windows 11 64位元'));
 });

@@ -73,7 +73,9 @@ powershell -File tools\package-installer.ps1 -NoRuntime
 powershell -File tools\package-win.ps1 -NoRuntime
 ```
 
-`build.ps1 -Extract` 会重新解包官方 EXE，`-Base <目录>` 可指向新版基底。`deploy.ps1 -Target <目录>` 可装配到别处，`-NoRuntime` 跳过内嵌 WebView2，`-NoAssets` 跳过素材缓存。
+`build.ps1 -Extract` 会重新解包官方 EXE，`-Base <目录>` 可指向新版基底。`deploy.ps1 -Target <目录>` 可装配到别处，`-NoAssets` 跳过素材缓存。
+
+`-NoRuntime` 不把系统那份 WebView2（约 870 MB）拷进 `runtime\`。入口 stub 探到 `runtime\` 不存在时不设 `WEBVIEW2_BROWSER_EXECUTABLE_FOLDER`，交给 WebView2 自己去找机器上的 Evergreen 运行时——和官方客户端的行为一致。代价是目标机器必须已经装了 WebView2（Win11 自带，Win10 未必）：安装包会在安装阶段检查并给出下载入口；已经装了却仍报「找不到 WebView2」，通常是 `runtime\` 里留了个坏目录，删掉即可，或用 `tools\fix-webview2.ps1` 重建。
 
 ### 官方安装包只解包，不执行
 
@@ -153,7 +155,7 @@ windows\
 1. **本机安全策略禁止 COM**（`WScript.Shell`、`Shell.Application` 一律拦截）。快捷方式改用 `pylnk3` 直接写 `.lnk` 二进制（`tools\make_shortcut.py`）。手写字节不行——Windows 要求 `LinkTargetIDList`，只有 `LinkInfo` 的链接会被 shell 拒绝。
 2. **`launch.ps1` 会被安全策略自动删除**（自提权脚本 `Start-Process -Verb RunAs`）。内容存档在 `src\installer\launch.ps1.disabled.txt`，入口统一用 `WuwaTappoLauncher.exe`。
 3. **`schtasks.exe` 被黑名单拦截**，注册定时检查要用 PowerShell 原生 `Register-ScheduledTask`（`tools\install-schedule.ps1` 已处理）。
-4. **CI 已接入**（`.github/workflows/build-windows.yml`，`windows-2022` runner）。CI 产物不含素材缓存与内嵌 WebView2，体积约 83 MB；`/status` 的 `ready` 会是 `false`，图鉴按需回源官方 CDN。要完整离线图鉴就在本地跑一次 `prepare_cache.py` 再构建（完整产物约 1.1 GB）。
+4. **CI 已接入**（`.github/workflows/build-windows.yml`，`windows-2022` runner）。CI 产物不含素材缓存与内嵌 WebView2，体积约 83 MB；`/status` 的 `ready` 会是 `false`，图鉴按需回源官方 CDN。没有内嵌运行时，所以产物依赖系统 WebView2；CI 里有一条断言盯着入口 stub 的回退分支（`build_report_v2.json` 的 `runtime_fallback`），防止「stub 又把浏览器路径钉死到空目录」这类回归。要完整离线图鉴就在本地跑一次 `prepare_cache.py` 再构建（完整产物约 1.1 GB）。
 5. **安装包用 NSIS**（`tools\package-installer.ps1`）：按用户装到 `%LOCALAPPDATA%\Programs\`，不需要管理员权限，装完桌面与开始菜单各有快捷方式（指向 `WuwaTappoLauncher.exe`），控制面板可卸载。绿色 zip 仍保留（`tools\package-win.ps1`），供调试与免安装场景。
 6. **官方发新版不会自动适配**。`upstream-win.json` 锁住版本，构建不会静默换基底；跟版要手工重新定位锚点并实机验证。
 

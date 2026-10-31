@@ -56,8 +56,11 @@ if (-not $NoRuntime -and $wvRoots) {
     Copy-Item -LiteralPath $wv.FullName -Destination (Join-Path $Payload 'runtime') -Recurse
     "WebView2 运行时: $($wv.Name)"
   } else {
-    Write-Warning '未找到可用的 WebView2 运行时，程序将回退到系统运行时'
+    Write-Warning '未找到可用的 WebView2 运行时：产物将回退到目标机器的系统运行时（需已装 WebView2）'
   }
+} else {
+  # 入口 stub 只在 runtime\ 存在时才钉死浏览器路径，所以这里是安全的小体积产物。
+  Write-Host '跳过 WebView2 运行时：回退到目标机器的系统运行时（安装包会在安装阶段检查）'
 }
 
 # 脚本与文档

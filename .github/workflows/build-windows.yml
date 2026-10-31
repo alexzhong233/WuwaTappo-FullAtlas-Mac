@@ -87,11 +87,32 @@ jobs:
       - name: Build, patch and package
         shell: pwsh
         env:
-          # 显式指定解释器；无图形界面的 runner 上回退系统 WebView2，
-          # 产物体积从 ~700MB 降到 ~130MB
+          # 显式指定解释器。--no-runtime 不把 870MB 的 WebView2 私有运行时塞进产物，
+          # 改由入口 stub 回退到 runner / 用户机器上的系统运行时（与官方客户端一致），
+          # 产物体积从 ~700MB 降到 ~130MB。
           WUWA_PYTHON: ${{ steps.python.outputs.python-path }}
         run: |
           node scripts/build-platform.mjs --platform=win --package --no-runtime --region=${{ matrix.region }}
+
+      - name: Verify WebView2 fallback
+        shell: pwsh
+        # 发布包不带 runtime\，所以 stub 必须能回退系统运行时。
+        # 这条断言挡的是「stub 又把 WEBVIEW2_BROWSER_EXECUTABLE_FOLDER 钉死到空目录」的回归——
+        # 那会让装完的包双击就报 "找不到 WebView2"，而 runner 上没法开窗口验证。
+        run: |
+          $dir = if ('${{ matrix.region }}' -eq 'global') { 'windows/build-global' } else { 'windows/build' }
+          $report = Join-Path $dir 'build_report_v2.json'
+          if (-not (Test-Path -LiteralPath $report)) { throw "缺少构建报告：$report" }
+          $stub = (Get-Content -LiteralPath $report -Raw | ConvertFrom-Json).private_webview_entry_stub
+          if (-not $stub) { throw '构建报告里没有入口 stub 记录' }
+          if ($stub.runtime_fallback -ne $true) {
+            throw '入口 stub 仍无条件钉死 WEBVIEW2_BROWSER_EXECUTABLE_FOLDER：--no-runtime 产物会启动失败'
+          }
+          Write-Host "入口 stub 支持回退系统运行时 (rva=$($stub.rva), size=$($stub.size))"
+          $payload = if ('${{ matrix.region }}' -eq 'global') { 'windows/build-global/payload' } else { 'windows/build/payload' }
+          if (Test-Path -LiteralPath (Join-Path $payload 'runtime')) {
+            throw "payload 里出现了 runtime\，--no-runtime 构建不该带私有运行时"
+          }
 
       - name: Save pinned official installer
         if: steps.installer-cache.outputs.cache-hit != 'true'

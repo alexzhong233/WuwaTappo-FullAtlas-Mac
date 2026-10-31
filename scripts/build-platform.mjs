@@ -203,7 +203,7 @@ const otherPlatformHint = platform => {
   }
   return [
     '另一平台 Windows 无法在当前系统构建（需要 Windows + 官方 Windows 客户端）。',
-    '  · CI：push 到 main 后 .github/workflows/build-windows.yml 会在 windows-2022 runner 上产出 zip',
+    '  · CI：push 到 main 后 .github/workflows/build-windows.yml 会在 windows-2022 runner 上产出 exe 安装包',
     '  · 本机：在 Windows 上执行 npm run build:win -- --package',
   ].join('\n');
 };

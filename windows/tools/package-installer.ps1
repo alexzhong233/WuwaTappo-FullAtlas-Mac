@@ -93,6 +93,7 @@ $nsi = Join-Path $staging 'installer.nsi'
 $template = @'
 Unicode true
 SetCompressor /SOLID lzma
+!include LogicLib.nsh
 Name "{{PRODUCT}}"
 OutFile "{{PKG}}"
 InstallDir "$LOCALAPPDATA\Programs\{{PRODUCT}}"
@@ -107,11 +108,44 @@ Page instfiles
 UninstPage uninstConfirm
 UninstPage instfiles
 
+; 官方客户端不内嵌 WebView2，直接用系统运行时；缺失时只有双击那一刻才由 wry 报错。
+; 这里把同一个判断提前到安装阶段：不下载、不静默安装，只给官方 Evergreen 入口。
+; 内嵌了 runtime\ 的完整包（构建时没带 -NoRuntime）跳过检查。
+Function CheckWebView2
+  ${If} ${FileExists} "$INSTDIR\runtime\msedgewebview2.exe"
+    DetailPrint "已内嵌 WebView2 运行时，跳过系统运行时检查"
+    Return
+  ${EndIf}
+  StrCpy $0 ""
+  SetRegView 64
+  ReadRegStr $0 HKLM "SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
+  ${If} $0 == ""
+    SetRegView 32
+    ReadRegStr $0 HKLM "SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
+  ${EndIf}
+  SetRegView lastused
+  ${If} $0 == ""
+    ReadRegStr $0 HKCU "SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
+  ${EndIf}
+  ${If} $0 != ""
+    DetailPrint "WebView2 运行时: $0"
+    Return
+  ${EndIf}
+  DetailPrint "未检测到 Microsoft Edge WebView2 运行时"
+  MessageBox MB_YESNO|MB_ICONEXCLAMATION \
+    "未检测到 Microsoft Edge WebView2 运行时。$\r$\n$\r$\n程序靠它显示界面，缺失时双击会直接报错退出。$\r$\n$\r$\n是否现在打开官方下载页？装完再启动本程序。" \
+    IDNO wv2_skip
+  ExecShell "open" "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+  wv2_skip:
+FunctionEnd
+
 Section "Install"
   SetShellVarContext current
   SetOutPath "$INSTDIR"
   File /r "{{PAYLOAD}}\*.*"
   WriteUninstaller "$INSTDIR\uninstall.exe"
+
+  Call CheckWebView2
 
   CreateDirectory "$SMPROGRAMS\{{PRODUCT}}"
   CreateShortCut "$SMPROGRAMS\{{PRODUCT}}\{{PRODUCT}}.lnk" "$INSTDIR\{{ENTRY}}"

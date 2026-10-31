@@ -18,6 +18,9 @@ function Get-WuwaPayloadFiles {
     if ($rel -in @('offline_state.json', 'assistant_state.json', 'update_hint.json', 'update_state.json')) { $skip = $true }
     # 自提权脚本：部分机器的安全策略禁止读取/分发，且产物用 WuwaTappoLauncher.exe 即进入口
     if ($rel -eq 'launch.ps1') { $skip = $true }
+    # 运行期缓存轮换残留与本机日志同样不该进发行包：日志里有本机路径，GitHub 上人人可下
+    if ($rel -like 'cache_previous_*') { $skip = $true }
+    if ($rel -like '*.log') { $skip = $true }
     -not $skip
   }
 }

@@ -59,8 +59,11 @@ struct.pack_into('<H', data, pe.FILE_HEADER.get_field_absolute_offset('NumberOfS
 struct.pack_into('<I', data, pe.OPTIONAL_HEADER.get_field_absolute_offset('SizeOfImage'), align(new_rva + len(payload), pe.OPTIONAL_HEADER.SectionAlignment))
 struct.pack_into('<I', data, pe.OPTIONAL_HEADER.get_field_absolute_offset('SizeOfInitializedData'), pe.OPTIONAL_HEADER.SizeOfInitializedData + raw_size)
 data += b'\0' * (raw_start - len(data)) + payload + b'\0' * (raw_size - len(payload))
-# Force a private WebView runtime even when the EXE is launched directly. The
-# firewall can then block that runtime without blocking other apps' WebViews.
+# Pin a private WebView runtime when one is shipped next to the EXE, and fall
+# back to the machine-wide Evergreen runtime when it is not (the official client
+# behaves the same way). The private copy only buys profile isolation now: the
+# old whole-process firewall rules that it was introduced for were removed, the
+# host no longer creates any rule of its own.
 boot_rva = align(new_rva + len(payload), pe.OPTIONAL_HEADER.SectionAlignment)
 boot_raw = align(len(data), pe.OPTIONAL_HEADER.FileAlignment)
 iat = {imp.name.decode(): imp.address - pe.OPTIONAL_HEADER.ImageBase
@@ -87,10 +90,24 @@ for name_label, suffix_label in [('runtime_name','runtime_suffix'),('profile_nam
     rel(bytes.fromhex('488d35'), suffix_label)
     loop=name_label+'_copy';labels[loop]=len(code)
     emit(bytes.fromhex('66ad66ab6685c0')); rel(bytes.fromhex('0f85'),loop)
+    if name_label == 'runtime_name':
+        # Only pin the browser folder when the private runtime was actually
+        # shipped. Pointing WEBVIEW2_BROWSER_EXECUTABLE_FOLDER at a missing
+        # directory makes the loader fail outright instead of falling back to
+        # the system runtime, which is exactly how -NoRuntime builds broke.
+        # GetFileAttributesW is already imported by the official client, so no
+        # new import descriptor is needed; INVALID_FILE_ATTRIBUTES == -1.
+        assert 'GetFileAttributesW' in iat, 'base is missing GetFileAttributesW, cannot guard the runtime path'
+        emit(bytes.fromhex('488d4c2420'))
+        rel(bytes.fromhex('ff15'), iat['GetFileAttributesW'])
+        emit(bytes.fromhex('3dffffffff'))
+        rel(bytes.fromhex('0f84'), 'skip_runtime')
     rel(bytes.fromhex('488d0d'),name_label)
     emit(bytes.fromhex('488d542420'))
     rel(bytes.fromhex('ff15'),iat['SetEnvironmentVariableW'])
     emit(bytes.fromhex('85c0')); rel(bytes.fromhex('0f84'),'failure')
+    if name_label == 'runtime_name':
+        labels['skip_runtime']=len(code)
 emit(bytes.fromhex('4881c4500400005f5e5b415b415a415941585a59589d'))
 rel(bytes.fromhex('e9'), pe.OPTIONAL_HEADER.AddressOfEntryPoint)
 labels['failure']=len(code)
@@ -129,6 +146,10 @@ assert hashlib.sha256(source.read_bytes()).hexdigest() == hashlib.sha256((BASE /
 report = {'input_sha256': hashlib.sha256(source.read_bytes()).hexdigest(), 'output_sha256': hashlib.sha256(data).hexdigest(),
           'output_size': len(data), 'assets': asset_changes, 'patches': patch_log,
           'certificate_removed': True, 'aslr_relocations_verified': True, 'original_modified': False,
-          'private_webview_entry_stub': {'rva': hex(boot_rva), 'size': len(code), 'original_entry_rva': hex(pe.OPTIONAL_HEADER.AddressOfEntryPoint)}}
+          'private_webview_entry_stub': {'rva': hex(boot_rva), 'size': len(code),
+                                         'original_entry_rva': hex(pe.OPTIONAL_HEADER.AddressOfEntryPoint),
+                                         # CI 断言用：stub 在 runtime\ 缺失时不再钉死浏览器路径，
+                                         # 而是让 WebView2 回退到系统 Evergreen 运行时。
+                                         'runtime_fallback': True}}
 (ROOT / 'build_report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
 print(json.dumps({k: v for k, v in report.items() if k != 'patches'}, indent=2))

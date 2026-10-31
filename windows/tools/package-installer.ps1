@@ -98,7 +98,6 @@ OutFile "{{PKG}}"
 InstallDir "$LOCALAPPDATA\Programs\{{PRODUCT}}"
 InstallDirRegKey HKCU "Software\{{PRODUCT}}" "InstallDir"
 RequestExecutionLevel user
-SetShellVarContext current
 ShowInstDetails show
 ShowUninstDetails show
 {{ICON}}
@@ -109,6 +108,7 @@ UninstPage uninstConfirm
 UninstPage instfiles
 
 Section "Install"
+  SetShellVarContext current
   SetOutPath "$INSTDIR"
   File /r "{{PAYLOAD}}\*.*"
   WriteUninstaller "$INSTDIR\uninstall.exe"
@@ -128,6 +128,7 @@ Section "Install"
 SectionEnd
 
 Section "Uninstall"
+  SetShellVarContext current
   Delete "$DESKTOP\{{PRODUCT}}.lnk"
   Delete "$SMPROGRAMS\{{PRODUCT}}\{{PRODUCT}}.lnk"
   RMDir "$SMPROGRAMS\{{PRODUCT}}"

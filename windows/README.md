@@ -66,7 +66,7 @@ powershell -File tools\fetch-official.ps1 -OfficialExe D:\path\WuwaTappo.exe
 # 3. 全量重建：解包 → 注入全图鉴 → 冻结本地服务 → 装配
 powershell -File tools\build.ps1 -Extract -Base build\official\1.0.3\base
 
-# 4. 打安装包到 dist\（NSIS；首次先装：choco install nsis -y）
+# 4. 打安装包到 dist\（NSIS；首次先装：winget install -e --id NSIS.NSIS 或 choco install nsis -y）
 powershell -File tools\package-installer.ps1 -NoRuntime
 
 #    只要绿色版 zip 时用这个：

@@ -100,12 +100,24 @@ def sync(root, progress, api=None, allowed_hosts=None):
         (stage / name).write_text(json.dumps(obj, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     # Preserve a recoverable previous generation; never replace a working cache
     # with a partial download. The host serializes this with mode changes.
+    # Windows 上杀毒软件 / 索引服务会在换缓存瞬间短暂占住目录（WinError 5），
+    # 与上面的下载重试同理，做几次退避重试而不是直接失败。
+    def rename_dir(src, dst, attempts=5):
+        error = None
+        for attempt in range(attempts):
+            try:
+                src.rename(dst)
+                return
+            except PermissionError as exc:
+                error = exc
+                time.sleep(attempt + 0.5)
+        raise error
     archive = root / ('cache_previous_' + str(time.time_ns()))
-    cache.rename(archive)
+    rename_dir(cache, archive)
     try:
-        stage.rename(cache)
+        rename_dir(stage, cache)
     except Exception:
-        archive.rename(cache)
+        rename_dir(archive, cache)
         raise
     return {'changed': True, 'atlas_count': len(atlas['data']), 'asset_count': len(records),
             'assets_json_ts': activity['data']['assets_json_ts']}

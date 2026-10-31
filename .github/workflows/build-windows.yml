@@ -29,6 +29,7 @@ jobs:
           node-version: '24'
 
       - uses: actions/setup-python@v5
+        id: python
         with:
           python-version: '3.13'
 
@@ -47,14 +48,18 @@ jobs:
         id: installer-cache
         uses: actions/cache/restore@v4
         with:
-          path: windows/build/official
+          # 只缓存安装包与解出的主程序；解包产物 app\ 不进缓存，避免几百 MB 冗余
+          path: |
+            windows/build/official/*/*setup.exe
+            windows/build/official/*/base/WuwaTappo.official.exe
           key: windows-official-${{ steps.pinned.outputs.version }}-${{ steps.pinned.outputs.urlhash }}
 
       - name: Build, patch and package
         shell: pwsh
         env:
-          # 无图形界面的 runner 上回退系统 WebView2，产物体积从 ~700MB 降到 ~130MB
-          WUWA_PYTHON: ${{ env.pythonLocation }}\python.exe
+          # 显式指定解释器；无图形界面的 runner 上回退系统 WebView2，
+          # 产物体积从 ~700MB 降到 ~130MB
+          WUWA_PYTHON: ${{ steps.python.outputs.python-path }}
         run: |
           node scripts/build-platform.mjs --platform=win --package --no-runtime
 

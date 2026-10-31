@@ -105,7 +105,7 @@ windows\
 1. **本机安全策略禁止 COM**（`WScript.Shell`、`Shell.Application` 一律拦截）。快捷方式改用 `pylnk3` 直接写 `.lnk` 二进制（`tools\make_shortcut.py`）。手写字节不行——Windows 要求 `LinkTargetIDList`，只有 `LinkInfo` 的链接会被 shell 拒绝。
 2. **`launch.ps1` 会被安全策略自动删除**（自提权脚本 `Start-Process -Verb RunAs`）。内容存档在 `src\installer\launch.ps1.disabled.txt`，入口统一用 `WuwaTappoLauncher.exe`。
 3. **`schtasks.exe` 被黑名单拦截**，注册定时检查要用 PowerShell 原生 `Register-ScheduledTask`（`tools\install-schedule.ps1` 已处理）。
-4. **CI 已接入**（`.github/workflows/build-windows.yml`，`windows-2022` runner）。CI 产物不含素材缓存与内嵌 WebView2，体积约 130 MB；首次浏览图鉴会回源官方 CDN。本地完整产物仍建议带这两样。
+4. **CI 已接入**（`.github/workflows/build-windows.yml`，`windows-2022` runner）。CI 产物不含素材缓存与内嵌 WebView2，体积约 83 MB；`/status` 的 `ready` 会是 `false`，图鉴按需回源官方 CDN。要完整离线图鉴就在本地跑一次 `prepare_cache.py` 再构建（完整产物约 1.1 GB）。
 5. **只有绿色版，没有安装包**（未装 Inno Setup）。需要时再说。
 6. **官方发新版不会自动适配**。`upstream-win.json` 锁住版本，构建不会静默换基底；跟版要手工重新定位锚点并实机验证。
 

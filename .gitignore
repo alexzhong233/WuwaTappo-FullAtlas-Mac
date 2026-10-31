@@ -39,3 +39,6 @@
 /windows/assistant_state.json
 __pycache__/
 *.pyc
+
+# 本地工作区记忆与工具数据
+/.workbuddy/

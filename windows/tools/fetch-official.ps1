@@ -61,6 +61,98 @@ function Find-SevenZip {
   return $null
 }
 
+<#
+  官方安装包是两层包装：外层是个自解压壳（PE，内层整个塞进 .rdata），
+  真正的 NSIS-3 安装器从壳内部某个偏移开始。
+
+  7-Zip 只能看到外层，会把它当普通 PE 解析 —— 于是解出来的是 .text/.rdata/
+  .pdata/CERTIFICATE 这些节区，一个安装文件都没有。这不是 7-Zip 版本问题：
+  23.01 / 24.09 / 25.01 三个版本都这样，强制 -t# 也不行。
+
+  判定与 macOS 侧 macos/scripts/extract-assets.mjs 的 findEmbeddedNsis 一致：
+    1. 扫 NSIS 签名 EF BE AD DE + 'NullsoftInst'，读 +24 处的长度字段得到头的结束位置
+    2. 找一个 MZ/PE，其节区原始数据正好结束在该 NSIS 头处 —— 那就是内层安装器
+  切片用 NSIS 头给出的 end，而不是文件尾，避免把外壳的签名尾巴带进去。
+#>
+function Read-PeRawEnd([byte[]]$bytes, [long]$start) {
+  if ($start + 0x40 -gt $bytes.Length) { return $null }
+  if ($bytes[$start] -ne 0x4D -or $bytes[$start + 1] -ne 0x5A) { return $null }
+  $peOff = [BitConverter]::ToUInt32($bytes, $start + 0x3c)
+  if ($peOff -lt 0x40 -or $peOff -gt 0x400) { return $null }
+  $pe = $start + $peOff
+  if ($pe + 24 -gt $bytes.Length) { return $null }
+  if ([BitConverter]::ToUInt32($bytes, $pe) -ne 0x00004550) { return $null }
+  $sections = [BitConverter]::ToUInt16($bytes, $pe + 6)
+  $optSize = [BitConverter]::ToUInt16($bytes, $pe + 20)
+  $tableStart = $pe + 24 + $optSize
+  $rawEnd = [long]0
+  for ($i = 0; $i -lt $sections; $i++) {
+    $entry = $tableStart + $i * 40
+    if ($entry + 40 -gt $bytes.Length) { return $null }
+    $rawSize = [BitConverter]::ToUInt32($bytes, $entry + 16)
+    $rawPtr = [BitConverter]::ToUInt32($bytes, $entry + 20)
+    $end = $start + [long]$rawPtr + [long]$rawSize
+    if ($end -gt $rawEnd) { $rawEnd = $end }
+  }
+  return $rawEnd
+}
+
+function Get-NsisPayloadBounds([string]$path) {
+  $bytes = [IO.File]::ReadAllBytes($path)
+  $latin = [Text.Encoding]::GetEncoding(28591)
+  $text = $latin.GetString($bytes)
+  $signature = $latin.GetString([byte[]](0xEF, 0xBE, 0xAD, 0xDE) + [Text.Encoding]::ASCII.GetBytes('NullsoftInst'))
+
+  $headers = @{}
+  $pos = 0
+  while (($pos = $text.IndexOf($signature, $pos, [StringComparison]::Ordinal)) -ge 0) {
+    # 签名之前还有 4 字节（长度字段所在位置），与 mac 侧 header = offset - 4 对齐
+    $header = $pos - 4
+    if ($header -ge 0 -and $header + 28 -le $bytes.Length) {
+      $following = [BitConverter]::ToUInt32($bytes, $header + 24)
+      $end = [long]$header + [long]$following
+      # 键是头的起点：PE 的节区数据正好结束在这里，才说明它紧跟的就是内层安装器
+      if ($following -ge 28 -and $end -le $bytes.Length) { $headers["$header"] = $end }
+    }
+    $pos++
+  }
+  if ($headers.Count -eq 0) { return $null }
+
+  $mz = 0
+  while (($mz = $text.IndexOf('MZ', $mz, [StringComparison]::Ordinal)) -ge 0) {
+    $rawEnd = Read-PeRawEnd $bytes $mz
+    if ($rawEnd -and $headers.ContainsKey("$rawEnd")) {
+      return [pscustomobject]@{ Start = [long]$mz; End = [long]$headers["$rawEnd"]; Header = [long]$rawEnd }
+    }
+    $mz += 2
+  }
+  return $null
+}
+
+# 主程序在 NSIS 里不一定叫 WuwaTappo.exe：Tauri 的 NSIS 脚本会把它改成 $_21_ 之类的变量名。
+# 所以按锁定大小认；大小对不上再退回「体积最大的候选」。
+# 排除 setup.exe / uninstall.exe / *.dll：它们同样是 PE，但不是应用本体。
+function Select-OfficialExe([string]$dir, $expectedSize) {
+  $candidates = @()
+  foreach ($file in @(Get-ChildItem -LiteralPath $dir -Recurse -File -ErrorAction SilentlyContinue)) {
+    if ($file.Length -lt 20MB) { continue }
+    if ($file.Name -match '^(setup|uninstall)\.exe$' -or $file.Extension -eq '.dll') { continue }
+    $stream = [IO.File]::OpenRead($file.FullName)
+    try {
+      $head = New-Object byte[] 2
+      $read = $stream.Read($head, 0, 2)
+    } finally { $stream.Dispose() }
+    if ($read -ne 2 -or $head[0] -ne 0x4D -or $head[1] -ne 0x5A) { continue }
+    $candidates += $file
+  }
+  if ($candidates.Count -eq 0) { return $null }
+  if ($expectedSize) {
+    $exact = @($candidates | Where-Object { $_.Length -eq [long]$expectedSize })
+    if ($exact.Count -ge 1) { return $exact[0] }
+  }
+  return ($candidates | Sort-Object Length -Descending | Select-Object -First 1)
+}
+
 # 不依赖 Get-FileHash：从 pwsh 7 环境启动 PS 5.1 时该 cmdlet 可能加载不到
 function Get-Sha256Hex([string]$path) {
   $algorithm = [Security.Cryptography.SHA256]::Create()
@@ -143,24 +235,52 @@ if ((Test-Path -LiteralPath $official) -and -not $Force) {
     $sevenZip = Find-SevenZip
     if (-not $sevenZip) {
       throw @"
-找不到 7-Zip。解包需要它，且本脚本不会执行官方安装器。
+找不到 7-Zip。下载路径需要它，且本脚本不会执行官方安装器。
   安装： winget install 7zip.7zip
-  或者： 手动从安装包取出 WuwaTappo.exe 后用 -OfficialExe 直接指定
+  或者（本地推荐，和上游 FullAtlas 的做法一致）：装好官方客户端后
+        用 -OfficialExe 指向 %LOCALAPPDATA% 下的 WuwaTappo.exe，全程不下载、不解包
 "@
     }
     "7-Zip: $sevenZip"
     $extractDir = Join-Path $work 'app'
     if (Test-Path -LiteralPath $extractDir) { Remove-Item -LiteralPath $extractDir -Recurse -Force }
     New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
-    & $sevenZip x $setup "-o$extractDir" -y -bso0 -bsp0
-    if ($LASTEXITCODE -ne 0) { throw "7z 解包失败，退出码 $LASTEXITCODE" }
-    $inner = Get-ChildItem -LiteralPath $extractDir -Recurse -Filter 'WuwaTappo.exe' -ErrorAction SilentlyContinue |
-      Where-Object { $_.Length -gt 20MB } |
-      Sort-Object Length -Descending | Select-Object -First 1
-    if (-not $inner) {
-      throw "解包后未找到 WuwaTappo.exe。目录内容：$((Get-ChildItem $extractDir -Recurse -File | Select-Object -First 10 -ExpandProperty Name) -join ', ')"
+
+    $bounds = Get-NsisPayloadBounds $setup
+    $archive = $setup
+    $payloadFile = $null
+    if ($bounds) {
+      $payloadFile = Join-Path $work '_nsis_payload.exe'
+      $length = $bounds.End - $bounds.Start
+      $reader = [IO.File]::OpenRead($setup)
+      try {
+        $writer = [IO.File]::Create($payloadFile)
+        try {
+          $reader.Position = $bounds.Start
+          $buffer = New-Object byte[] (1MB)
+          $left = $length
+          while ($left -gt 0) {
+            $read = $reader.Read($buffer, 0, [int][Math]::Min($buffer.Length, $left))
+            if ($read -le 0) { throw "读取内层安装包时提前结束（还差 $left 字节）" }
+            $writer.Write($buffer, 0, $read)
+            $left -= $read
+          }
+        } finally { $writer.Dispose() }
+      } finally { $reader.Dispose() }
+      $archive = $payloadFile
+      "外层壳: 0x{0:x}-0x{1:x} 是内层 NSIS 安装包（{2:N1} MB）" -f $bounds.Start, $bounds.End, ($length / 1MB)
     }
-    "内层主程序: $($inner.FullName)  ({0:N1} MB)" -f ($inner.Length / 1MB)
+
+    & $sevenZip x $archive "-o$extractDir" -y -bso0 -bsp0
+    if ($LASTEXITCODE -ne 0) { throw "7z 解包失败，退出码 $LASTEXITCODE（包: $archive）" }
+    if ($payloadFile) { Remove-Item -LiteralPath $payloadFile -Force -ErrorAction SilentlyContinue }
+
+    $expectedSize = if ($lock -and $lock.official_exe_size) { [long]$lock.official_exe_size } else { $null }
+    $inner = Select-OfficialExe -dir $extractDir -expectedSize $expectedSize
+    if (-not $inner) {
+      throw "解包后未找到主程序。目录内容：$((Get-ChildItem $extractDir -Recurse -File | Select-Object -First 10 -ExpandProperty Name) -join ', ')"
+    }
+    "内层主程序: $($inner.Name)  ({0:N1} MB)" -f ($inner.Length / 1MB)
     $sourceExe = $inner.FullName
   }
   if (Test-Path -LiteralPath $base) { Remove-Item -LiteralPath $base -Recurse -Force }

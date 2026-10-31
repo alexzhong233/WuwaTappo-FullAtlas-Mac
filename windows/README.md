@@ -37,10 +37,10 @@ cd windows
 # 1. 建 .venv 并装依赖（只需一次；已存在会跳过）
 powershell -File tools\setup-env.ps1
 
-# 2. 取官方基底（按 upstream-win.json 锁定版本，下载后用 7-Zip 解包）
+# 2. 取官方基底（按 upstream-win.json 锁定的 1.0.3 自动下载并解包）
 powershell -File tools\fetch-official.ps1
 
-#    已经有解好的主程序时，直接给路径最省事（不下载、不解包）
+#    本机已装官方客户端、只是不想再下 192 MB 安装包时（可选，不是必须）
 powershell -File tools\fetch-official.ps1 -OfficialExe D:\path\WuwaTappo.exe
 
 # 3. 全量重建：解包 → 注入全图鉴 → 冻结本地服务 → 装配
@@ -54,9 +54,17 @@ powershell -File tools\package-win.ps1 -NoRuntime
 
 ### 官方安装包只解包，不执行
 
-`fetch-official.ps1` 用 7-Zip 从安装包里取出 `WuwaTappo.exe`，**从不运行安装器**。原因：执行安装器会真的把客户端装进系统、启动进程、在 `%LOCALAPPDATA%` 写安装缓存，这不是构建该做的事，也会和你已装的版本混在一起。
+官方 1.0.3 的安装包是**两层包装**：外层是个自解压壳（把内层整个塞进 `.rdata`），里面才是真正的 NSIS-3 安装器。
 
-需要 7-Zip（`winget install 7zip.7zip`），或者直接用 `-OfficialExe` 指向一份已解出的主程序。
+7-Zip 只看得到外层，会把它当普通 PE 解析——解出来的是 `.text`、`.rdata`、`.pdata`、`CERTIFICATE` 这些节区，一个安装文件都没有。这跟 7-Zip 版本无关：23.01 / 24.09 / 25.01 三个版本表现一致，强制 `-t#` 也认不出。
+
+所以 `fetch-official.ps1` 先自己剥壳：按 NSIS 签名（`EF BE AD DE` + `NullsoftInst`）定位内层安装器的头，再找一个「节区原始数据正好结束在该头起点」的 MZ/PE，切出 `[start, end)` 交给 7-Zip。判定与 macOS 侧 `macos/scripts/extract-assets.mjs` 的 `findEmbeddedNsis` 完全一致。
+
+解出来的主程序在 NSIS 里叫 `$_21_` 而不是 `WuwaTappo.exe`（Tauri 的 NSIS 脚本用变量名保存），所以按 `upstream-win.json` 的 `official_exe_size` 认，再核对 SHA-256。
+
+全程**不执行安装器**：执行会真的把客户端装进系统、启动进程、在 `%LOCALAPPDATA%` 写安装缓存，和本机已装版本混在一起。
+
+需要 7-Zip（CI runner 自带；本地 `winget install 7zip.7zip`）。本地只想省掉这次下载时，才用 `-OfficialExe`——版本仍按 `upstream-win.json` 记为 1.0.3，不会退回旧版。
 
 ### 版本锁定
 

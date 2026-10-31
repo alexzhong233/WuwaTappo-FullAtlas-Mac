@@ -58,5 +58,8 @@ $venvPy = Join-Path $Venv 'Scripts\python.exe'
 & $venvPy -m pip install -q --disable-pip-version-check -r (Join-Path $Root 'src\requirements-build.txt')
 if ($LASTEXITCODE -ne 0) { throw '安装依赖失败' }
 
-& $venvPy -c "import PyInstaller, pefile, brotli, jsbeautifier, psutil; print('依赖就绪 PyInstaller', PyInstaller.__version__)"
+# 探针只输出 ASCII：CI 的 Python stdout 是 cp1252，打印中文会抛 UnicodeEncodeError，
+# 看起来像依赖没装好，实际 import 早已成功。同时把退出码纳入判定，别让失败被吞掉。
+& $venvPy -c "import PyInstaller, pefile, brotli, jsbeautifier, psutil; print('deps ok: PyInstaller ' + PyInstaller.__version__)"
+if ($LASTEXITCODE -ne 0) { throw '依赖导入失败，看上方 Python 报错' }
 "环境就绪：$Venv"

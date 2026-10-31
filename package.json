@@ -1,6 +1,6 @@
 {
   "name": "wuwatappo-fullatlas-mac",
-  "version": "1.2.1",
+  "version": "1.2.2-alpha.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,6 +15,7 @@
     "assets:sync": "node scripts/sync-upstream.mjs",
     "upstream:check": "node scripts/sync-upstream.mjs --check",
     "upstream:update": "node scripts/sync-upstream.mjs --update-lock",
+    "official:update": "node scripts/update-official.mjs",
     "setup": "npm run assets:sync && npm run icons && npm run prepare:frontend",
     "package": "bash scripts/package-macos.sh",
     "setup:global": "WUWA_REGION=global npm run setup",

@@ -8,6 +8,7 @@ import { patchSessionBarriers, patchLoginReady, patchDomesticSdkUrls, patchMacUp
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const profile = getRegionProfile();
+const lock = JSON.parse(await readFile(path.join(root, profile.upstreamLock), 'utf8'));
 const source = path.join(root, profile.frontendDir);
 const output = path.join(root, profile.preparedDir);
 const index = await readFile(path.join(source, 'index.html'), 'utf8');
@@ -20,7 +21,7 @@ const original = files.get(entry);
 if (!original?.includes(`const APP_REGION="${profile.region}"`)) throw new Error(`Expected official ${profile.region} frontend.`);
 let main = patchMacUpdater(original);
 main = profile.region === 'CN' ? patchDomesticSdkUrls(main) : patchGlobalAuthListener(main);
-files.set(entry, patchSessionBarriers(main));
+files.set(entry, patchSessionBarriers(main, profile.id === 'cn' && lock.version === '1.0.3' ? 1 : 2));
 
 function patchOne(description, matches, patch) {
   const selected = [...files].filter(([name, content]) => matches(name, content));
@@ -30,7 +31,7 @@ function patchOne(description, matches, patch) {
 }
 
 patchOne('modal event bridge', name => /\/modalBridge-[^/]+\.js$/.test(name), patchLoginReady);
-patchOne('update feedback view', (_, content) => /\.value=n\("setting_version_check_failed"\)/.test(content), patchMacUpdateFeedback);
+patchOne('update feedback view', (_, content) => /\.value=[$\w]+\("setting_version_check_failed"\)/.test(content), patchMacUpdateFeedback);
 patchOne('About view', (_, content) => /t=[$\w]+\(\(\)=>k\("about_content"\)/.test(content), content => patchMacAbout(content, profile.region));
 patchOne('main layout view', (_, content) => content.includes('[main] window layout during open failed'), patchMacLayoutBarriers);
 if (profile.region === 'CN') patchOne('domestic SDK loader', (name, content) => name !== entry && content.includes('t.dataset.kuroSdkRetry="true"'), patchDomesticLoginReload);

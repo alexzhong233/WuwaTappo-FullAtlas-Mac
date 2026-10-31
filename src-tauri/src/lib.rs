@@ -6,6 +6,7 @@ mod input;
 mod menu;
 mod profile;
 mod session;
+mod shortcuts;
 mod socket;
 mod startup;
 mod storage;
@@ -241,6 +242,9 @@ fn handle(invoke: Invoke) -> bool {
         socket::native_ws_send,
         socket::native_ws_close,
         fullatlas::fullatlas_request,
+        shortcuts::get_app_shortcuts,
+        shortcuts::set_app_shortcuts,
+        shortcuts::set_shortcut_capture,
     ];
     handler(invoke)
 }
@@ -279,6 +283,9 @@ pub fn run() {
                 app.path().app_data_dir()?.join("counters.json"),
             ));
             app.manage(fullatlas::FullAtlasState::new(app.path().app_data_dir()?)?);
+            app.manage(shortcuts::Shortcuts::new(
+                app.path().app_data_dir()?.join("shortcuts.json"),
+            )?);
             menu::setup(&handle)?;
             app.manage(system::start_network_monitor(handle.clone())?);
             tauri::WebviewWindowBuilder::new(

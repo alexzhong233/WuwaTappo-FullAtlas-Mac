@@ -1,4 +1,4 @@
-"""Extend a structurally verified 1.0.2 frontend; fail on contract changes."""
+"""Extend a structurally checked official frontend; fail on contract changes."""
 import re
 
 
@@ -27,7 +27,14 @@ def integrate(project, base, frontend, structure, shared, main, panel, main_name
     chest_text = source[chest['start']:chest['end']]
     cost = re.search(re.escape(store)+r'\.totalClickCount < ([\w$]+)', chest_text)[1]
     animation = re.search(r'const \w+ = ([\w$]+)\(e\);', chest_text)[1]
-    assert 'Wn = pe(() =>' in source and 'Gn = pe(() =>' in source, 'chest readiness contract'
+    ready_pattern = r'([\w$]+) = '+re.escape(mi['computed'])+r'\(\(\) => ([\w$]+)\.value \|\| !'+re.escape(store)+r'\.isLoggedIn \? !0 : ([\w$]+)\.value <= 0\)'
+    readies = re.findall(ready_pattern, source)
+    assert len(readies) == 2, 'chest readiness contract'
+    left_ready, _, left_remaining = readies[0]
+    right_ready, _, right_remaining = readies[1]
+    busy = re.search(r'if \(([\w$]+)\.value \|\| ([\w$]+)\.value\) return;', chest_text)
+    assert busy, 'chest busy guard changed'
+    invoke = mi.get('invoke$1') or mi['invoke']
     # Counters, native persistence and logout remain byte-for-byte original.
     # The official installer would replace this executable and lose integrations.
     shared = once(shared, 'function isAppUpdaterEnabled() {', 'function isAppUpdaterEnabled() {\n return false;')
@@ -61,14 +68,14 @@ if(localAtlasController)localAtlasController.assistant=createDesktopAssistant({r
  account:()=>String({store}.userInfo?.cuid||{store}.userInfo?.user_id||{store}.userInfo?.uid||'guest'),
  loggedIn:()=>{store}.isLoggedIn,blocked:()=>__lg.assistant.updateRequired.value,
  press:key=>{handlers[0]}(key,true),release:{handlers[1]},chestCost:{cost},
- chests:()=>({{left:{{remaining:Math.max(0,Bt.value),ready:Wn.value}},right:{{remaining:Math.max(0,Nt.value),ready:Gn.value}},cooldown:1800000,busy:Dn.value||kt.value}}),
+ chests:()=>({{left:{{remaining:Math.max(0,{left_remaining}.value),ready:{left_ready}.value}},right:{{remaining:Math.max(0,{right_remaining}.value),ready:{right_ready}.value}},cooldown:1800000,busy:{busy[1]}.value||{busy[2]}.value}}),
  monitors:__assistantMonitors,restoreMonitor:__assistantRestoreMonitor,
  currentMonitor:{mi['currentMonitor']},toast:{mi['showToast']},
  openSettings:{open_settings},
  openView:async view=>{{
    if(__lg.assistant.updateRequired.value)return;
    await {open_tab}(view==='atlas'?'atlas':'settings');
-   const send=()=>{mi['invoke$1']}('plugin:event|emit',{{event:'local-assistant-view',payload:view}}).catch(()=>{{}});
+   const send=()=>{invoke}('plugin:event|emit',{{event:'local-assistant-view',payload:view}}).catch(()=>{{}});
    send();window.setTimeout(send,800);window.setTimeout(send,2200);
  }},
  quit:{quit_fn},
@@ -83,17 +90,23 @@ if(localAtlasController)localAtlasController.assistant=createDesktopAssistant({r
     main = once(main, 'let __localSaved=null;',code+'\nlet __localSaved=null;')
     monitor_name = next(p.name for p in (base/'readable_js/assets').glob('switchDisplayMonitor-*.js'))
     monitor = (base/'readable_js/assets'/monitor_name).read_text(encoding='utf-8')
-    monitor = once(monitor, 'async function Nt() {', 'async function Nt(targetName=null) {')
-    monitor = once(monitor, 'if (u.length <= 1)', 'if (!targetName && u.length <= 1)')
-    monitor = once(monitor, 'const m = (M + 1) % u.length,', 'if(targetName && (!u.some(x=>x.name===targetName)||w?.name===targetName))return false;\n    const m = targetName ? u.findIndex(x=>x.name===targetName) : (M + 1) % u.length,')
-    monitor = once(monitor, 'async function Ht() {', 'async function Ht(targetName=null) {')
-    monitor = once(monitor, 'y = Nt();', 'y = Nt(targetName);')
+    # The 1.0.3 monitor module bundles additional UI and uses new bindings.
+    current = 'Aa' if main_name == 'index-pp8VWaUF.js' else 'Nt'
+    wrapper = 'An' if main_name == 'index-pp8VWaUF.js' else 'Ht'
+    collection, index, current_monitor, target_index, promise = ('d','N','_','g','O') if current == 'Aa' else ('u','M','w','m','y')
+    monitor = once(monitor, f'async function {current}() {{', f'async function {current}(targetName=null) {{')
+    monitor = once(monitor, f'if ({collection}.length <= 1)', f'if (!targetName && {collection}.length <= 1)')
+    monitor = once(monitor, f'const {target_index} = ({index} + 1) % {collection}.length,', f'if(targetName && (!{collection}.some(x=>x.name===targetName)||{current_monitor}?.name===targetName))return false;\n    const {target_index} = targetName ? {collection}.findIndex(x=>x.name===targetName) : ({index} + 1) % {collection}.length,')
+    monitor = once(monitor, f'async function {wrapper}() {{', f'async function {wrapper}(targetName=null) {{')
+    monitor = once(monitor, f'{promise} = {current}();', f'{promise} = {current}(targetName);')
     (frontend/'assets'/monitor_name).write_text(monitor, encoding='utf-8')
-    main = 'import {a as __assistantMonitors,n as __assistantRestoreMonitor} from "./'+monitor_name+'";\n'+main
+    monitor_exports = 'b as __assistantMonitors,N as __assistantRestoreMonitor' if current == 'Aa' else 'a as __assistantMonitors,n as __assistantRestoreMonitor'
+    main = 'import {'+monitor_exports+'} from "./'+monitor_name+'";\n'+main
     h=pi['createBaseVNode']
     row=f'''{h}('div',{{class:'setting-item','data-desktop-assistant':'true'}},[{h}('div',{{class:'setting-label'}},[{h}('div',{{class:'setting-title'}},'挂机与统计'),{h}('div',{{class:'setting-sub'}},'后台点击、自动开箱、每日统计、房间历史与版本更新')]),{h}('button',{{class:'setting-btn',type:'button',onClick:()=>__lg.assistant.openPanel()}},'打开')]),'''
     panel = once(panel, h+"('div',{class:'setting-item','data-local-gallery-setting':'true'},[",row+'\n'+h+"('div',{class:'setting-item','data-local-gallery-setting':'true'},[")
-    assert panel.count('await ds(), await xt()') == 2, 'panel close lifecycle changed'
+    close_anchors = 'await bs(), await Rt()' if main_name == 'index-pp8VWaUF.js' else 'await ds(), await xt()'
+    assert panel.count(close_anchors) == 2, 'panel close lifecycle changed'
     panel = once(panel,'let __panelDisposed=false;',f'''let __assistantViewUnlisten=null;
 {pi['onMounted']}(async()=>{{__assistantViewUnlisten=await {pi['listen']}('local-assistant-view',event=>{{
  const view=event.payload;

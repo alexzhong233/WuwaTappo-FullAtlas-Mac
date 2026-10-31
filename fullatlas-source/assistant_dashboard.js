@@ -111,4 +111,21 @@ function createAssistantDashboard(d){
       renderView=()=>{const week=value.weekly?.normal||[],max=Math.max(1,...week.map(x=>x.count));summary.textContent='今日 '+fmt(week.at(-1)?.count)+' · 昨日 '+fmt(week.at(-2)?.count);chart.replaceChildren();for(const day of week){const col=el('div',undefined,chart,'wt-column');el('div',fmt(day.count),col);const bar=el('div','',col,'wt-bar');bar.style.height=Math.max(3,120*day.count/max)+'px';el('div',day.date.slice(5),col);}legacy.textContent=value.legacy_local?.total?'旧版模拟点数 '+fmt(value.legacy_local.total)+' 已单独存档，不计入真实账号与此统计。':'';};
     }else if(key==='rooms'){
       const c=card();el('h3','去过的房间',c);el('p','成功进入后记录房间号与房主，收藏后置顶。本地全图鉴开启时不能进入联机。',c,'wt-muted');const list=el('div',undefined,c);
-      renderView=()=>{list.replaceChildren();if(!value.rooms?.length)el('div','还没有房间历史',list,'wt-empty');for(const room of value.rooms||[]){const row=el('div',undefined,list,'wt-log');button(room.favorite?'★':'☆',row,async()=>{try{await d.favorite(room.code,!room.favorite);await refresh();}catch(e){notice.textContent=e.message;}});const join=button(room.code+' · '+(room.host||'未知房主'),row,()=>d.join(room.code).ca
+      renderView=()=>{list.replaceChildren();if(!value.rooms?.length)el('div','还没有房间历史',list,'wt-empty');for(const room of value.rooms||[]){const row=el('div',undefined,list,'wt-log');button(room.favorite?'★':'☆',row,async()=>{try{await d.favorite(room.code,!room.favorite);await refresh();}catch(e){notice.textContent=e.message;}});const join=button(room.code+' · '+(room.host||'未知房主'),row,()=>d.join(room.code).catch(e=>{notice.textContent=e.message;}));join.disabled=d.atlas.enabled.value||value.update_required;}};
+    }else{
+      const c=card();el('h3','自动化设置',c);const fields={};
+      for(const[key,title,detail]of [['enabled','后台自动点击','使用桌宠原版计数；打字、Shift 和鼠标拖拽时暂停'],['auto_chest','自动开宝箱','不等待键鼠空闲；沿用原版登录、冷却、余额与服务器奖励'],['remember_monitor','记住显示器','下次启动恢复；找不到原显示器时保持原位']]){
+        const label=el('label',undefined,c,'wt-setting'),t=el('div',undefined,label);el('h3',title,t);el('p',detail,t,'wt-muted');const input=el('input',undefined,label);input.type='checkbox';input.setAttribute('aria-label',title);input.onchange=()=>change({[key]:input.checked});fields[key]=input;
+      }
+      const row=el('label',undefined,c,'wt-setting');const t=el('div',undefined,row);el('h3','自动开箱余额阈值',t);el('p','仍需达到原版宝箱实际费用（当前至少 1,000）',t,'wt-muted');const limit=el('input',undefined,row);limit.type='number';limit.min=1;limit.max=1000000000;limit.onchange=()=>change({threshold:Number(limit.value)});fields.threshold=limit;
+      const u=card();el('h3','Mac 版本更新',u);el('p','这是 macOS 原生整合版。桌宠只能检查官方基底；检测到更新后由维护者或 GitHub Actions 下载 Windows 原包、转换 Mac、注入全图鉴并发布 Mac 包。Windows 全图鉴升级包不适用于 Mac。',u,'wt-muted');const updates=el('p','当前整合版 '+d.version+' · 官方基底 1.0.3 · 实验适配',u),check=button('检查官方更新',u,async()=>{check.disabled=true;try{const r=await d.atlas.request('/official/update-check',{});updates.textContent=r.message+' 当前整合版 '+d.version+'。';}catch(e){updates.textContent='检查失败：'+e.message;}finally{check.disabled=false;}});updates.style.margin='12px 0';
+      const sync=card();el('h3','本地图鉴资源',sync);el('p','本地开关只影响物品展示与本机装扮，登录、点数、开箱、图片下载和版本检查继续使用网络。',sync,'wt-muted');button('检查并同步图鉴',sync,async()=>{try{const r=await d.atlas.request('/sync',{force:true});notice.textContent=r.status==='running'?'图鉴资源正在后台同步':'同步请求已提交';}catch(e){notice.textContent=e.message;}});
+      renderView=()=>{for(const[k,input]of Object.entries(fields)){if(doc.activeElement===input)continue;if(input.type==='checkbox')input.checked=!!value.settings[k];else input.value=value.settings[k];}};
+    }
+    if(value)paint();
+  }
+  function paint(){if(!value||closed||pending)return;setBadge();renderView();}
+  async function refresh(){if(closed||refreshing||pending)return;refreshing=true;try{const next=await d.getState();if(!pending){value=next;paint();}}catch(e){notice.textContent='连接失败：'+e.message;}finally{refreshing=false;}}
+  showTab(tabs.some(([key])=>key===d.initialTab)?d.initialTab:'overview');refresh();timer=window.setInterval(refresh,2000);root.focus();
+  return {close,focus:()=>root.focus(),showTab:key=>{if(tabs.some(([name])=>name===key))showTab(key);}};
+}

@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing integration version tag, for example v1.2.1
+        description: Existing integration version tag, for example v1.2.2-alpha.1
         required: true
         type: string
 
@@ -28,6 +28,13 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
       - uses: actions/download-artifact@v4
         with:
           pattern: WuwaTappo-*-Mac-arm64
@@ -41,22 +48,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+)?$ ]]
           for EXT in zip dmg; do
             PACKAGES=(dist/WuwaTappo-FullAtlas-Mac-*-arm64."$EXT")
             [[ ${#PACKAGES[@]} -eq 1 && -f "${PACKAGES[0]}" ]]
           done
-          cat > /tmp/release-notes.md <<'NOTES'
-          ## WuwaTappo FullAtlas Mac · 国服预览构建
-
-          Apple Silicon，macOS 13 及以上。使用官方 1.0.2 前端及 FullAtlas v1.2 适配代码。官方 1.0.3 仍需适配审核。
-
-          图鉴数据可刷新，图像仍依赖官方 CDN。关闭本地图鉴后可使用官方联机；点击和奖励继续由真实账号服务处理。
-
-          本构建使用本机临时签名，未经 Apple 公证。下载 DMG 后将应用拖入“应用程序”。源码自动化验证完成后，仍需人工验收首次登录、输入监控授权、图鉴切换及联机。
-
-          此 Release 保持草稿，待验收后由维护者发布。应用不支持安装 Windows 更新包。
-          NOTES
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+          const version = JSON.parse(readFileSync('package.json', 'utf8')).version;
+          const official = JSON.parse(readFileSync('upstream-cn.json', 'utf8')).version;
+          if (process.env.TAG !== `v${version}`) throw new Error('Tag does not match integration version');
+          for (const ext of ['zip', 'dmg']) {
+            if (!existsSync(`dist/WuwaTappo-FullAtlas-Mac-${version}-arm64.${ext}`)) {
+              throw new Error('Release artifact version does not match source');
+            }
+          }
+          const notes = `docs/RELEASE_NOTES_${version}.md`;
+          const body = existsSync(notes)
+            ? readFileSync(notes, 'utf8')
+            : `# WuwaTappo FullAtlas Mac ${version}\n\n官方国服基底 ${official}，Apple Silicon / macOS 13 及以上。实验预发布，完整业务仍需验收。\n`;
+          writeFileSync('/tmp/release-notes.md', `${body}\n\n官方资源版本：${official}。此 Release 保持草稿，待维护者验收后手动发布。\n`);
+          NODE
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/*.zip dist/*.dmg --clobber
           else

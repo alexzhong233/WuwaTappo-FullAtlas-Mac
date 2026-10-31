@@ -12,7 +12,7 @@ git push -u origin official-1.0.3
 
 如果已经设置 `origin`，先用 `git remote -v` 检查，不要重复添加。仓库默认分支设为 `main`；`official-1.0.3` 是实验适配分支，不能与稳定基底混淆。
 
-`release-assets/` 存放之前构建的 1.2.1 安装包，仅供本地使用，已加入忽略规则。`dist/`、官方 EXE、解包前端、node_modules、Rust target、缓存和日志均不应推送到 Git 历史。安装包用 GitHub Release 附件分发。
+`release-assets/` 存放本地构建的 1.2.1 与 1.2.2-alpha.1 安装包和源码归档，已加入忽略规则。`dist/`、官方 EXE、解包前端、node_modules、Rust target、缓存和日志均不应推送到 Git 历史。安装包用 GitHub Release 附件分发。优先用上面的 Git 命令上传，以保留两个分支；网页上传时仅使用已整理的源码归档内容，不要上传整个本地项目文件夹。
 
 ## 启用 CI 和官方更新检查
 
@@ -20,6 +20,15 @@ git push -u origin official-1.0.3
 2. 如使用官方更新 PR 自动化，到 Settings → Actions → General 开启 **Allow GitHub Actions to create and approve pull requests**；只使用普通构建无需此设置。
 3. 手动运行 CI，确认从空缓存也能准备前端、测试并打包。
 4. 每日检查只发现并验证候选更新，不自动合并或发布。
+
+本地也可以在适配分支执行：
+
+```bash
+npm run official:update                 # 只检测官方版本
+npm run official:update -- --apply      # 下载、适配、测试、构建并打包
+```
+
+`--apply` 失败会恢复 `upstream-cn.json` 和已提取前端；未知官方版本会在 FullAtlas 版本 / SHA-256 / 契约门禁处停止。构建成功后检查 `.work/official-update-result.json`，再提交资源锁和适配代码。不要把 Windows EXE 或临时构建缓存上传到源码仓库。
 
 构建工作流的下载镜像指向当前仓库自己的 `upstream-resources` Release。没有镜像时首先从官方源下载；不要复制别人的凭据或私有下载链接。
 
@@ -40,3 +49,11 @@ Release 工作流构建 ZIP / DMG 后创建 **Draft / Pre-release**，不会直�
 ## 后续版本
 
 新版本需要同步 `package.json`、`package-lock.json`、Cargo、Tauri 配置与助手显示版本，并重新完成测试和实机验收。官方版本锁记录的是官方 Windows 资源版本，与整合版发布版本独立。对未知官方版本不要绕过版本 / SHA-256 门禁。
+
+## 发布官方 1.0.3 实验分支
+
+该分支整合版版本号为 **1.2.2-alpha.1**，不要用 `v1.2.1` 标记它。适配内容和待验收项见 [实验记录](OFFICIAL_1.0.3.md)，可复制 [实验版发布说明](RELEASE_NOTES_1.2.2-alpha.1.md)。
+
+本地安装包为 `release-assets/WuwaTappo-FullAtlas-Mac-1.2.2-alpha.1-arm64.zip` 和同名 `.dmg`。可以在 GitHub Releases 中手动创建 `v1.2.2-alpha.1`，目标选 `official-1.0.3`，勾选 **Pre-release** 并先保存草稿，再上传这两个附件。不要把它标记为稳定最新版。
+
+此分支的 Release 工作流也支持 `v1.2.2-alpha.1` 标签，并从标签对应源码读取整合版本和官方资源版本；它仍只创建草稿预发布。GitHub Actions 尚未在用户仓库运行，需首次验证。`main` 上的原工作流只接受不含预发布后缀的标签。

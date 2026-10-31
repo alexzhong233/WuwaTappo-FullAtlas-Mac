@@ -8,7 +8,7 @@ const root = new URL('../', import.meta.url);
 import { contract } from './frontend-context.mjs';
 
 test('every application runtime command has a macOS handler', async () => {
-  const modules = ['lib', 'windows', 'storage', 'input', 'system'];
+  const modules = ['lib', 'windows', 'storage', 'input', 'system', 'shortcuts'];
   const implementation = (await Promise.all(modules.map(name => readFile(new URL(`src-tauri/src/${name}.rs`, root), 'utf8')))).join('\n');
   const missing = contract.commands.filter(c => c.kind === 'application' && c.scopes.includes('application-runtime'))
     .filter(c => !implementation.includes(`"${c.name}"`) && !implementation.includes(`fn ${c.name}(`))

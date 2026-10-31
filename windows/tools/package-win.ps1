@@ -59,6 +59,8 @@ $files = Get-ChildItem -LiteralPath $Source -Recurse -File -ErrorAction Silently
   if ($rel -like 'profile\*') { $skip = $true }
   # 运行期状态不打包，避免把账号与缓存带给别人
   if ($rel -in @('offline_state.json', 'assistant_state.json', 'update_hint.json', 'update_state.json', 'local_config.json')) { $skip = $true }
+  # 自提权脚本：部分机器的安全策略禁止读取/分发，且产物用 WuwaTappoLauncher.exe 即进入口
+  if ($rel -eq 'launch.ps1') { $skip = $true }
   -not $skip
 }
 Write-Host ("共 {0} 个文件" -f $files.Count)
@@ -81,12 +83,19 @@ if ($sevenZip) {
 } else {
   Write-Host "== 打包（Compress-Archive，未找到 7z）=="
   # Compress-Archive 需要实际目录结构，先复制到 staging 再压
+  $skipped = 0
   foreach ($f in $files) {
     $rel = $f.FullName.Substring($Source.Length).TrimStart('\')
     $dest = Join-Path $staging $rel
     New-Item -ItemType Directory -Path (Split-Path $dest -Parent) -Force | Out-Null
-    Copy-Item -LiteralPath $f.FullName -Destination $dest
+    try {
+      Copy-Item -LiteralPath $f.FullName -Destination $dest -ErrorAction Stop
+    } catch {
+      $skipped++
+      Write-Warning "跳过无法读取的文件: $rel ($($_.Exception.GetType().Name))"
+    }
   }
+  if ($skipped -gt 0) { "已跳过 $skipped 个文件" }
   Compress-Archive -Path (Join-Path $staging '*') -DestinationPath $zip -CompressionLevel Optimal
 }
 

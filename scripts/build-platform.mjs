@@ -186,18 +186,18 @@ function buildWin({ withPackage }) {
   call('build.ps1', ['-Extract', '-Base', info.base, ...(noRuntime ? ['-NoRuntime'] : [])]);
 
   if (!withPackage) {
-    log('\n已跳过打包（加 --package 产出 zip）');
+    log('\n已跳过打包（加 --package 产出 exe 安装包）');
     return;
   }
   section('Windows 打包');
-  call('package-win.ps1', noRuntime ? ['-NoRuntime'] : []);
+  call('package-installer.ps1', noRuntime ? ['-NoRuntime'] : []);
 }
 
 const otherPlatformHint = platform => {
   if (platform === 'mac') {
     return [
       '另一平台 macOS 无法在当前系统构建（Tauri 需要 macOS + Xcode）。',
-      '  · CI：push 到 main 后 .github/workflows/build.yml 会在 macos-15 runner 上产出 dmg/zip',
+      '  · CI：push 到 main 后 .github/workflows/build.yml 会在 macos-15 runner 上产出 dmg',
       '  · 本机：在 macOS 上执行 npm run build:mac -- --package',
     ].join('\n');
   }

@@ -113,12 +113,10 @@ mkdir -p "$OUTPUT"
 OUTPUT="$(cd "$OUTPUT" && pwd)"
 STAGE=$(mktemp -d "${TMPDIR:-/tmp}/wuwatappo-package.XXXXXX")
 trap 'rm -rf "$STAGE"' EXIT
-NAME="$ARTIFACT_PREFIX-$VERSION-arm64"
+NAME="$ARTIFACT_PREFIX-$VERSION-macOS-arm64"
 phase '复制应用并复查签名'
 ditto --norsrc --noextattr --noqtn --noacl "$APP" "$STAGE/$PRODUCT_NAME.app"
 /usr/bin/codesign --verify --deep --strict "$STAGE/$PRODUCT_NAME.app"
-phase '生成 ZIP'
-ditto -c -k --norsrc --noextattr --noqtn --noacl --keepParent "$STAGE/$PRODUCT_NAME.app" "$STAGE/$NAME.zip"
 phase '生成 DMG'
 mkdir "$STAGE/dmg"
 mv "$STAGE/$PRODUCT_NAME.app" "$STAGE/dmg/"
@@ -130,5 +128,5 @@ hdiutil create -fs HFS+ -size "${IMAGE_SIZE_MIB}m" -volname "$PRODUCT_NAME" -src
 phase '校验 DMG'
 hdiutil verify "$STAGE/$NAME.dmg"
 phase '交付安装包'
-mv "$STAGE/$NAME.zip" "$STAGE/$NAME.dmg" "$OUTPUT/"
-printf '完整%s安装包：\n%s\n%s\n' "$REGION_LABEL" "$OUTPUT/$NAME.zip" "$OUTPUT/$NAME.dmg"
+mv "$STAGE/$NAME.dmg" "$OUTPUT/"
+printf '完整%s安装包：\n%s\n' "$REGION_LABEL" "$OUTPUT/$NAME.dmg"

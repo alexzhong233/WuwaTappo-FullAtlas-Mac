@@ -23,9 +23,9 @@ jobs:
       matrix:
         include:
           - region: cn
-            artifact: WuwaTappo-Full-Community-Windows-x64
+            artifact: WuwaTappo-Full-CN-Community-Windows-x64
           - region: global
-            artifact: WuwaTappo-Global-Community-Windows-x64
+            artifact: WuwaTappo-Full-Global-Community-Windows-x64
     steps:
       - uses: actions/checkout@v5
         with:
@@ -64,6 +64,26 @@ jobs:
             windows/build${{ matrix.region == 'global' && '-global' || '' }}/official/*/base/WuwaTappo.official.exe
           key: windows-official-${{ matrix.region }}-${{ steps.pinned.outputs.version }}-${{ steps.pinned.outputs.urlhash }}
 
+      - name: Install NSIS
+        # 发行物是安装包 exe（双击快捷方式即用），不是绿色 zip
+        shell: pwsh
+        run: |
+          function Find-Makensis {
+            $list = @()
+            $programFilesX86 = ${env:ProgramFiles(x86)}
+            if ($programFilesX86) { $list += (Join-Path $programFilesX86 'NSIS\makensis.exe') }
+            if ($env:ProgramFiles) { $list += (Join-Path $env:ProgramFiles 'NSIS\makensis.exe') }
+            foreach ($item in $list) { if (Test-Path -LiteralPath $item) { return $item } }
+            return $null
+          }
+          $makensis = Find-Makensis
+          if (-not $makensis) {
+            choco install nsis -y --no-progress
+            $makensis = Find-Makensis
+          }
+          if (-not $makensis) { throw 'NSIS 装不上，无法产出 exe 安装包' }
+          Write-Host "makensis=$makensis"
+
       - name: Build, patch and package
         shell: pwsh
         env:
@@ -90,7 +110,7 @@ jobs:
         with:
           name: ${{ matrix.artifact }}
           path: |
-            dist/*Windows-x64*.zip
-            dist/*Windows-x64*.zip.sha256
+            dist/*Windows-x64*.exe
+            dist/*Windows-x64*.exe.sha256
           if-no-files-found: error
           retention-days: 14

@@ -62,11 +62,11 @@ Windows 侧版本由 `windows/upstream-win.json` 锁定，不会因为官方发�
 
 | 项目 | 当前状态 |
 | --- | --- |
-| 服务区域 | 国服与国际服都构建：两侧各自锁定官方 1.0.3 基底，产物名带 `Full-Community` / `Global-Community` |
+| 服务区域 | 国服与国际服都构建：两侧各自锁定官方 1.0.3 基底，产物名带 `Full-CN-Community` / `Full-Global-Community` |
 | 系统 | macOS：Apple Silicon（M 系列），macOS 13 及以上；Windows：10/11 x64 |
 | 整合版本 | 1.2.2-alpha.1 实验版，基于官方国服 1.0.3 与 FullAtlas v1.2 |
 | 分支 | `main` 为 1.0.3 基底，两个平台同仓共用；`dev` 用于开发版；`official-1.0.3` 保留为历史适配分支 |
-| 验证 | 自动测试、原生构建、签名与 ZIP / DMG 校验通过；角色和设置面板可显示，完整业务仍需实机验收 |
+| 验证 | 自动测试、原生构建、签名与 DMG / EXE 校验通过；角色和设置面板可显示，完整业务仍需实机验收 |
 | 应用标识 | 沿用 `dev.w33d.wuwatappo.fullatlas.mac`，改名只动显示名与产物名，既有数据目录和钥匙串不受影响 |
 | 签名 | Ad hoc 临时签名，未通过 Apple 公证 |
 
@@ -84,7 +84,7 @@ Windows 侧版本由 `windows/upstream-win.json` 锁定，不会因为官方发�
 
 > Windows 侧的安装、运行与管理见 [windows/README.md](windows/README.md)。两侧产物不通用，不要混用安装包。
 
-发布后在本仓库的 **Releases** 中下载 `WuwaTappo-Full-Community-版本-arm64.dmg`，将应用拖入「应用程序」。ZIP 与 DMG 内的应用相同，只需选一个。
+发布后在本仓库的 **Releases** 中下载对应的 `.dmg`（国服 `WuwaTappo-Full-CN-Community-<版本>-macOS-arm64.dmg`，国际服 `WuwaTappo-Full-Global-Community-<版本>-macOS-arm64.dmg`），将应用拖入「应用程序」。
 
 1. 打开 `WuwaTappo Full Community.app`。如系统拦截，请在确认来源后到「系统设置 → 隐私与安全性」选择「仍要打开」，无需关闭系统安全保护。
 2. 首次启动可选「仅本次会话」或「记住登录」。前者将登录信息保存在内存，后者使用 macOS 钥匙串。

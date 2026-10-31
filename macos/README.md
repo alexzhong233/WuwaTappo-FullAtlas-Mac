@@ -8,7 +8,7 @@
 | 为什么 | 官方没有 Mac 包 | 官方包本来能跑，重写没有收益 |
 | 运行时 | 原生 IPC 绑定 | Python 本地服务 + 本机 HTTP（端口 43229） |
 | 工具链 | Node + Rust + Xcode CLT + 7-Zip | PowerShell + Python + PyInstaller |
-| 产物 | `.app` / `.dmg`（约 70 MiB） | 绿色目录（约 1.1 GB） |
+| 产物 | `.dmg`（约 130 MiB，拖入「应用程序」） | `.exe` 安装包（NSIS，装完双击快捷方式即用） |
 
 两侧共用同一套构建链，但各自锁定自己那一条上游：国服 `upstream-cn.json`、国际服 `upstream-global.json`（都在本目录，安装包直链与 SHA-256 一并锁住）。服务区域由 `scripts/regions.mjs` 单点定义，构建脚本一律通过 `WUWA_REGION` 取，不各写一份。
 
@@ -53,7 +53,7 @@ npm run build:mac -- --package   # 上面两步合一，走跨平台分派器
 ```bash
 npm run setup:global   # = WUWA_REGION=global npm run setup
 npm run build:global
-npm run package:global # 产物名 WuwaTappo-Global-Community-*
+npm run package:global # 产物名 WuwaTappo-Full-Global-Community-*-macOS-arm64.dmg
 ```
 
 区域差异全部由 `scripts/regions.mjs` 的 profile 决定：`frontend`/`frontend-global`、`build/frontend`/`build/frontend-global`、`icons`/`icons-global`、`tauri.conf.json`/`tauri.global.conf.json`、以及产物前缀。两者**不能交叉**：`prepare-frontend.mjs` 会校验入口模块里是否写着对应区域的 `APP_REGION`，`network-smoke.mjs` 还会拒绝另一服的源码，串了会直接报错而不是静默构建出错的包。

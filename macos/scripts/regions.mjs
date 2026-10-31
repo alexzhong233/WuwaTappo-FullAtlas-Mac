@@ -7,7 +7,7 @@ const profiles = {
     upstreamLock: 'upstream-cn.json', frontendDir: 'frontend', preparedDir: 'build/frontend',
     iconsDir: 'src-tauri/icons', tauriConfig: null,
     productName: 'WuwaTappo Full Community', identifier: 'dev.w33d.wuwatappo.fullatlas.mac',
-    artifactPrefix: 'WuwaTappo-Full-Community',
+    artifactPrefix: 'WuwaTappo-Full-CN-Community',
   },
   global: {
     id: 'global', region: 'GLOBAL', label: '国际服',
@@ -17,7 +17,7 @@ const profiles = {
     upstreamLock: 'upstream-global.json', frontendDir: 'frontend-global', preparedDir: 'build/frontend-global',
     iconsDir: 'src-tauri/icons-global', tauriConfig: 'src-tauri/tauri.global.conf.json',
     productName: 'WuwaTappo Global Community', identifier: 'dev.w33d.wuwatappo.global.mac',
-    artifactPrefix: 'WuwaTappo-Global-Community',
+    artifactPrefix: 'WuwaTappo-Full-Global-Community',
   },
 };
 

@@ -22,9 +22,9 @@ jobs:
       matrix:
         include:
           - region: cn
-            artifact: Full-Community
+            artifact: WuwaTappo-Full-CN-Community
           - region: global
-            artifact: Global-Community
+            artifact: WuwaTappo-Full-Global-Community
     env:
       WUWA_REGION: ${{ matrix.region }}
       WUWA_INSTALLER_MIRROR_BASE: ${{ github.server_url }}/${{ github.repository }}/releases/download/upstream-resources
@@ -80,7 +80,7 @@ jobs:
           npm run test:rust
       - name: Build complete application
         run: npm run build -- -- --locked
-      - name: Verify and package ZIP and DMG
+      - name: Verify and package DMG
         run: |
           set -o pipefail
           npm run package 2>&1 | tee macos/.work/package-macos.log
@@ -94,9 +94,8 @@ jobs:
           retention-days: 14
       - uses: actions/upload-artifact@v4
         with:
-          name: WuwaTappo-${{ matrix.artifact }}-arm64
+          name: ${{ matrix.artifact }}-macOS-arm64
           path: |
-            dist/*.zip
             dist/*.dmg
           if-no-files-found: error
           retention-days: 14

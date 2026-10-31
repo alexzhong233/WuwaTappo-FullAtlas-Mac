@@ -1,8 +1,8 @@
 ﻿<#
-  把装配好的 app\ 打成可分发 zip
+  把装配好的 app\ 打成便携 zip（调试/绿色版用，发行走 package-installer.ps1 的 exe）
 
-  产物： dist\WuwaTappo-Full-Community-Windows-x64-<version>.zip
-         dist\WuwaTappo-Full-Community-Windows-x64-<version>.zip.sha256
+  产物： dist\WuwaTappo-Full-CN-Community-Windows-x64-<version>.zip
+         dist\WuwaTappo-Full-CN-Community-Windows-x64-<version>.zip.sha256
 
   版本号取自仓库根的 package.json（与 macOS 产物保持一致）。
 
@@ -51,21 +51,10 @@ $staging = Join-Path $R.WorkDir 'package-staging'
 if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
 New-Item -ItemType Directory -Path $staging -Force | Out-Null
 
-$excludeDirs = @()
-if ($NoRuntime) { $excludeDirs += 'runtime' }
+. (Join-Path $PSScriptRoot 'payload.ps1')
 
-Write-Host "== 收集文件（排除：$(@($excludeDirs + @('profile','*.log')) -join ', ')）=="
-$files = Get-ChildItem -LiteralPath $Source -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
-  $rel = $_.FullName.Substring($Source.Length).TrimStart('\')
-  $skip = $false
-  foreach ($d in $excludeDirs) { if ($rel -eq $d -or $rel.StartsWith("$d\")) { $skip = $true } }
-  if ($rel -like 'profile\*') { $skip = $true }
-  # 只排除真正的运行期状态；local_config.json 是部署必需（含本机 HTTP 的 token），必须带上
-  if ($rel -in @('offline_state.json', 'assistant_state.json', 'update_hint.json', 'update_state.json')) { $skip = $true }
-  # 自提权脚本：部分机器的安全策略禁止读取/分发，且产物用 WuwaTappoLauncher.exe 即进入口
-  if ($rel -eq 'launch.ps1') { $skip = $true }
-  -not $skip
-}
+Write-Host '== 收集文件 =='
+$files = Get-WuwaPayloadFiles -Source $Source -NoRuntime:$NoRuntime
 Write-Host ("共 {0} 个文件" -f $files.Count)
 
 $sevenZip = @(

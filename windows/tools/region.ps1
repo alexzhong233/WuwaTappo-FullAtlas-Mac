@@ -4,8 +4,8 @@
 #   目录    build|app           vs build-global|app-global
 #   锁定    upstream-win.json   vs upstream-win-global.json
 #   素材源  mc-wuwatappo…       vs wutheringwaves-wuwatappo…
-#   产物    WuwaTappo-Full-Community-Windows-x64-<ver>.zip
-#           WuwaTappo-Global-Community-Windows-x64-<ver>.zip
+#   产物    WuwaTappo-Full-CN-Community-Windows-x64-<ver>.exe
+#           WuwaTappo-Full-Global-Community-Windows-x64-<ver>.exe
 function Get-RegionProfile {
   param([string]$Root, [string]$Region)
 
@@ -24,6 +24,7 @@ function Get-RegionProfile {
     AssetsHost      = $(if ($isGlobal) { 'https://wutheringwaves-wuwatappo.kurogames-global.com' } else { 'https://mc-wuwatappo.kurogames-global.com' })
     ApiBase         = $(if ($isGlobal) { 'https://api-wutheringwaves-wuwatappo.kurogames-global.com' } else { 'https://api-mc-wuwatappo.kurogames-global.com' })
     UpdaterHostFile = $(if ($isGlobal) { 'latest-global_host.json' } else { 'latest_host.json' })
-    ArtifactPrefix  = $(if ($isGlobal) { 'WuwaTappo-Global-Community' } else { 'WuwaTappo-Full-Community' })
+    ArtifactPrefix  = $(if ($isGlobal) { 'WuwaTappo-Full-Global-Community' } else { 'WuwaTappo-Full-CN-Community' })
+    ProductName     = $(if ($isGlobal) { 'WuwaTappo Global Community' } else { 'WuwaTappo CN Community' })
   }
 }

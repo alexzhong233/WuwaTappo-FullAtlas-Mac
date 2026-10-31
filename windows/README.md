@@ -27,7 +27,7 @@
 | 素材 / 接口 | `mc-wuwatappo.kurogames-global.com` | `wutheringwaves-wuwatappo.kurogames-global.com` |
 | 基底 | `build\official\` | `build-global\official\` |
 | 构建 / 装配 | `build\`、`app\` | `build-global\`、`app-global\` |
-| 产物 | `WuwaTappo-Full-Community-Windows-x64-<ver>.zip` | `WuwaTappo-Global-Community-Windows-x64-<ver>.zip` |
+| 产物 | `WuwaTappo-Full-CN-Community-Windows-x64-<ver>.exe` | `WuwaTappo-Full-Global-Community-Windows-x64-<ver>.exe` |
 
 ```powershell
 node scripts/build-platform.mjs --platform=win --region=global --package --no-runtime
@@ -66,7 +66,10 @@ powershell -File tools\fetch-official.ps1 -OfficialExe D:\path\WuwaTappo.exe
 # 3. 全量重建：解包 → 注入全图鉴 → 冻结本地服务 → 装配
 powershell -File tools\build.ps1 -Extract -Base build\official\1.0.3\base
 
-# 4. 打 zip 到 dist\
+# 4. 打安装包到 dist\（NSIS；首次先装：choco install nsis -y）
+powershell -File tools\package-installer.ps1 -NoRuntime
+
+#    只要绿色版 zip 时用这个：
 powershell -File tools\package-win.ps1 -NoRuntime
 ```
 
@@ -151,7 +154,7 @@ windows\
 2. **`launch.ps1` 会被安全策略自动删除**（自提权脚本 `Start-Process -Verb RunAs`）。内容存档在 `src\installer\launch.ps1.disabled.txt`，入口统一用 `WuwaTappoLauncher.exe`。
 3. **`schtasks.exe` 被黑名单拦截**，注册定时检查要用 PowerShell 原生 `Register-ScheduledTask`（`tools\install-schedule.ps1` 已处理）。
 4. **CI 已接入**（`.github/workflows/build-windows.yml`，`windows-2022` runner）。CI 产物不含素材缓存与内嵌 WebView2，体积约 83 MB；`/status` 的 `ready` 会是 `false`，图鉴按需回源官方 CDN。要完整离线图鉴就在本地跑一次 `prepare_cache.py` 再构建（完整产物约 1.1 GB）。
-5. **只有绿色版，没有安装包**（未装 Inno Setup）。需要时再说。
+5. **安装包用 NSIS**（`tools\package-installer.ps1`）：按用户装到 `%LOCALAPPDATA%\Programs\`，不需要管理员权限，装完桌面与开始菜单各有快捷方式（指向 `WuwaTappoLauncher.exe`），控制面板可卸载。绿色 zip 仍保留（`tools\package-win.ps1`），供调试与免安装场景。
 6. **官方发新版不会自动适配**。`upstream-win.json` 锁住版本，构建不会静默换基底；跟版要手工重新定位锚点并实机验证。
 
 ## 与 macOS 侧的关系

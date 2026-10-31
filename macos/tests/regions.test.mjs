@@ -28,6 +28,31 @@ test('Global has separate inputs, prepared resources, icon output and applicatio
   assert.deepEqual(tauriArguments('icons', global), ['icon', 'frontend-global/app-icon.png', '--output', 'src-tauri/icons-global']);
 });
 
+test('artifact naming is pinned per region and each platform ships exactly one format', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const repo = fileURLToPath(new URL('../..', import.meta.url));
+  assert.equal(getRegionProfile('cn').artifactPrefix, 'WuwaTappo-Full-CN-Community');
+  assert.equal(getRegionProfile('global').artifactPrefix, 'WuwaTappo-Full-Global-Community');
+  const mac = await readFile(path.join(repo, '.github/workflows/build.yml'), 'utf8');
+  const win = await readFile(path.join(repo, '.github/workflows/build-windows.yml'), 'utf8');
+  const release = await readFile(path.join(repo, '.github/workflows/release.yml'), 'utf8');
+  const packager = await readFile(path.join(repo, 'macos/scripts/package-macos.sh'), 'utf8');
+  // mac 只出 dmg、win 只出 exe 安装包；zip 不再作为发行物
+  assert.ok(mac.includes('dist/*.dmg'));
+  assert.ok(!mac.includes('dist/*.zip'));
+  assert.ok(win.includes('dist/*Windows-x64*.exe'));
+  assert.ok(!win.includes('dist/*Windows-x64*.zip'));
+  assert.match(packager, /NAME="\$ARTIFACT_PREFIX-\$VERSION-macOS-arm64"/);
+  // 发版必须两个平台都构建成功，且四个产物齐全
+  assert.match(release, /needs: \[build-macos, build-windows\]/);
+  for (const name of [
+    'WuwaTappo-Full-CN-Community-${version}-macOS-arm64.dmg',
+    'WuwaTappo-Full-Global-Community-${version}-macOS-arm64.dmg',
+    'WuwaTappo-Full-CN-Community-Windows-x64-${version}.exe',
+    'WuwaTappo-Full-Global-Community-Windows-x64-${version}.exe',
+  ]) assert.ok(release.includes(name), name);
+});
+
 test('unknown regions fail rather than silently selecting an account environment', () => {
   for (const region of ['CN', 'international', '', '__proto__', 'constructor']) {
     assert.throws(() => getRegionProfile(region), /未知服务区域/);

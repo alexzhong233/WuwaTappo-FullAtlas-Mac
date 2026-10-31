@@ -18,12 +18,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  # 两个平台都必须构建成功才允许发版：Windows 只出 exe 安装包，macOS 只出 dmg。
+  # 任何一个挂了，publish 直接不启动，不会出现"只发了一半平台"的 Release。
+  build-macos:
     uses: ./.github/workflows/build.yml
     with:
       ref: ${{ github.event.inputs.tag || github.ref }}
+  build-windows:
+    uses: ./.github/workflows/build-windows.yml
+    with:
+      ref: ${{ github.event.inputs.tag || github.ref }}
   publish:
-    needs: build
+    needs: [build-macos, build-windows]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -40,7 +46,7 @@ jobs:
           pattern: WuwaTappo-*
           merge-multiple: true
           path: dist
-      - name: Create draft Full Community release
+      - name: Create draft release with both platforms
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -49,35 +55,30 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+)?$ ]]
-          for EXT in zip dmg; do
-            PACKAGES=(dist/WuwaTappo-Full-Community-*-arm64."$EXT")
-            [[ ${#PACKAGES[@]} -eq 1 && -f "${PACKAGES[0]}" ]]
-          done
-          # Windows 产物为可选：历史 tag 或 Windows 构建失败时仍能发 Mac 版
-          if compgen -G 'dist/*Windows-x64*.zip' > /dev/null; then
-            echo "包含 Windows 产物："
-            ls -la dist/*Windows-x64*
-          else
-            echo "::warning::没有 Windows 产物，本次发布仅含 macOS"
-          fi
           node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync, existsSync } from 'node:fs';
           const version = JSON.parse(readFileSync('package.json', 'utf8')).version;
-          const official = JSON.parse(readFileSync('macos/upstream-cn.json', 'utf8')).version;
+          const cn = JSON.parse(readFileSync('macos/upstream-cn.json', 'utf8')).version;
+          const global = JSON.parse(readFileSync('macos/upstream-global.json', 'utf8')).version;
           if (process.env.TAG !== `v${version}`) throw new Error('Tag does not match integration version');
-          for (const ext of ['zip', 'dmg']) {
-            if (!existsSync(`dist/WuwaTappo-Full-Community-${version}-arm64.${ext}`)) {
-              throw new Error('Release artifact version does not match source');
-            }
-          }
+          // 四个产物缺一不可：两服 × 两平台，格式各自唯一（mac=dmg / win=exe）。
+          const expected = [
+            `WuwaTappo-Full-CN-Community-${version}-macOS-arm64.dmg`,
+            `WuwaTappo-Full-Global-Community-${version}-macOS-arm64.dmg`,
+            `WuwaTappo-Full-CN-Community-Windows-x64-${version}.exe`,
+            `WuwaTappo-Full-Global-Community-Windows-x64-${version}.exe`,
+          ];
+          const missing = expected.filter(name => !existsSync(`dist/${name}`));
+          if (missing.length) throw new Error(`Release 缺少产物，两个平台都必须构建成功：${missing.join(', ')}`);
           const notes = `macos/docs/RELEASE_NOTES_${version}.md`;
           const body = existsSync(notes)
             ? readFileSync(notes, 'utf8')
-            : `# WuwaTappo Full Community ${version}\n\n官方国服基底 ${official}，Apple Silicon / macOS 13 及以上。实验预发布，完整业务仍需验收。\n`;
-          writeFileSync('/tmp/release-notes.md', `${body}\n\n官方资源版本：${official}。此 Release 保持草稿，待维护者验收后手动发布。\n`);
+            : `# WuwaTappo Full Community ${version}\n\n社区版整合了官方客户端的本地图鉴与桌宠能力，国服与国际服分开打包。\n\n- macOS：Apple Silicon / macOS 13 及以上，下载 \`.dmg\` 拖入「应用程序」\n- Windows：下载 \`.exe\` 安装后双击快捷方式即可使用\n\n实验预发布，完整业务仍需验收。\n`;
+          writeFileSync('/tmp/release-notes.md', `${body}\n\n官方基底：国服 ${cn} / 国际服 ${global}。此 Release 保持草稿，待维护者验收后手动发布。\n`);
+          writeFileSync('/tmp/assets.txt', expected.map(name => `dist/${name}`).join('\n') + '\n');
           NODE
-          # 收集产物：mac 的 zip/dmg 必须存在，Windows zip 与校验和按需追加
-          FILES=(dist/*.zip dist/*.dmg)
+          mapfile -t FILES < /tmp/assets.txt
+          for FILE in "${FILES[@]}"; do ls -la "$FILE"; done
           if compgen -G 'dist/*.sha256' > /dev/null; then
             FILES+=(dist/*.sha256)
           fi

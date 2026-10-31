@@ -55,6 +55,6 @@ Release 工作流构建 ZIP / DMG 后创建 **Draft / Pre-release**，不会直�
 
 该分支整合版版本号为 **1.2.2-alpha.1**，适配内容和待验收项见 [实验记录](OFFICIAL_1.0.3.md)。当前适配已合入 `main`，`dev` 也从该基底持续构建。
 
-本地安装包为 `release-assets/WuwaTappo-Full-Community-1.2.2-alpha.1-arm64.zip` 和同名 `.dmg`。可以在 GitHub Releases 中手动创建 `v1.2.2-alpha.1`，目标选 `official-1.0.3`，勾选 **Pre-release** 并先保存草稿，再上传这两个附件。不要把它标记为稳定最新版。
+本地安装包为 macOS 的 `WuwaTappo-Full-CN-Community-1.2.2-alpha.1-macOS-arm64.dmg`（国际服换成 `Full-Global-Community`）与 Windows 的 `…-Windows-x64-1.2.2-alpha.1.exe`。可以在 GitHub Releases 中手动创建 `v1.2.2-alpha.1`，目标选 `official-1.0.3`，勾选 **Pre-release** 并先保存草稿，再上传这些附件。不要把它标记为稳定最新版。
 
-`dev` 分支每次 CI 成功后会自动更新 [dev 预发布](https://github.com/alexzhong233/WuwaTappo-Full-Community/releases/tag/dev)。正式发布时从 `main` 或经过验收的提交创建 `v*` 标签；Release 工作流会创建带 ZIP / DMG 的草稿预发布，维护者确认后点击 Publish.
+`dev` 分支每次 CI 成功后会自动更新 [dev 预发布](https://github.com/alexzhong233/WuwaTappo-Full-Community/releases/tag/dev)。正式发布时从 `main` 或经过验收的提交创建 `v*` 标签；Release 工作流会**先构建两个平台**，四个产物（两服 × macOS dmg / Windows exe）齐全才创建草稿预发布——缺任何一个平台就不发版，维护者确认后点击 Publish.

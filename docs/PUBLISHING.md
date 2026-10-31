@@ -8,9 +8,10 @@
 git remote add origin <你的仓库URL>
 git push -u origin main
 git push -u origin official-1.0.3
+git push -u origin dev
 ```
 
-如果已经设置 `origin`，先用 `git remote -v` 检查，不要重复添加。仓库默认分支设为 `main`；`official-1.0.3` 是实验适配分支，不能与稳定基底混淆。
+如果已经设置 `origin`，先用 `git remote -v` 检查，不要重复添加。仓库默认分支设为 `main`；`main` 已包含官方 1.0.3 适配。`dev` 从 `main` 派生，供持续开发和自动开发版发布；`official-1.0.3` 保留为历史适配分支。
 
 `release-assets/` 存放本地构建的 1.2.1 与 1.2.2-alpha.1 安装包和源码归档，已加入忽略规则。`dist/`、官方 EXE、解包前端、node_modules、Rust target、缓存和日志均不应推送到 Git 历史。安装包用 GitHub Release 附件分发。优先用上面的 Git 命令上传，以保留两个分支；网页上传时仅使用已整理的源码归档内容，不要上传整个本地项目文件夹。
 
@@ -52,8 +53,8 @@ Release 工作流构建 ZIP / DMG 后创建 **Draft / Pre-release**，不会直�
 
 ## 发布官方 1.0.3 实验分支
 
-该分支整合版版本号为 **1.2.2-alpha.1**，不要用 `v1.2.1` 标记它。适配内容和待验收项见 [实验记录](OFFICIAL_1.0.3.md)，可复制 [实验版发布说明](RELEASE_NOTES_1.2.2-alpha.1.md)。
+该分支整合版版本号为 **1.2.2-alpha.1**，适配内容和待验收项见 [实验记录](OFFICIAL_1.0.3.md)。当前适配已合入 `main`，`dev` 也从该基底持续构建。
 
 本地安装包为 `release-assets/WuwaTappo-FullAtlas-Mac-1.2.2-alpha.1-arm64.zip` 和同名 `.dmg`。可以在 GitHub Releases 中手动创建 `v1.2.2-alpha.1`，目标选 `official-1.0.3`，勾选 **Pre-release** 并先保存草稿，再上传这两个附件。不要把它标记为稳定最新版。
 
-此分支的 Release 工作流也支持 `v1.2.2-alpha.1` 标签，并从标签对应源码读取整合版本和官方资源版本；它仍只创建草稿预发布。GitHub Actions 尚未在用户仓库运行，需首次验证。`main` 上的原工作流只接受不含预发布后缀的标签。
+`dev` 分支每次 CI 成功后会自动更新 [dev 预发布](https://github.com/alexzhong233/WuwaTappo-FullAtlas-Mac/releases/tag/dev)。正式发布时从 `main` 或经过验收的提交创建 `v*` 标签；Release 工作流会创建带 ZIP / DMG 的草稿预发布，维护者确认后点击 Publish.

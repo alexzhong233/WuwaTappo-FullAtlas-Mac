@@ -54,7 +54,7 @@ npm run build:check -- --platform=win
 | 场景 | 产出 |
 | --- | --- |
 | push 到 `main` / `dev` | CI 同时跑 `build.yml`（macos-15）与 `build-windows.yml`（windows-2022），各自上传 artifact |
-| 打 tag `v*` | 两个平台的产物一起进同一个 Release（Windows 缺失时只发 macOS，不阻断） |
+| 打 tag `v*` | 两平台都构建成功才直接发布同一个 Release，四件产物缺一件就不发（`-alpha`/`-beta`/`-rc` 自动标 Pre-release） |
 
 Windows 侧版本由 `windows/upstream-win.json` 锁定，不会因为官方发新版就静默构建未适配的版本。
 

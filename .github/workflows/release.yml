@@ -46,7 +46,7 @@ jobs:
           pattern: WuwaTappo-*
           merge-multiple: true
           path: dist
-      - name: Create draft release with both platforms
+      - name: Publish release with both platforms
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -54,7 +54,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+)?$ ]]
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$ ]]
           node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync, existsSync } from 'node:fs';
           const version = JSON.parse(readFileSync('package.json', 'utf8')).version;
@@ -74,7 +74,7 @@ jobs:
           const body = existsSync(notes)
             ? readFileSync(notes, 'utf8')
             : `# WuwaTappo Full Community ${version}\n\n社区版整合了官方客户端的本地图鉴与桌宠能力，国服与国际服分开打包。\n\n- macOS：Apple Silicon / macOS 13 及以上，下载 \`.dmg\` 拖入「应用程序」\n- Windows：下载 \`.exe\` 安装后双击快捷方式即可使用\n\n实验预发布，完整业务仍需验收。\n`;
-          writeFileSync('/tmp/release-notes.md', `${body}\n\n官方基底：国服 ${cn} / 国际服 ${global}。此 Release 保持草稿，待维护者验收后手动发布。\n`);
+          writeFileSync('/tmp/release-notes.md', `${body}\n\n官方基底：国服 ${cn} / 国际服 ${global}。\n`);
           writeFileSync('/tmp/assets.txt', expected.map(name => `dist/${name}`).join('\n') + '\n');
           NODE
           mapfile -t FILES < /tmp/assets.txt
@@ -82,8 +82,16 @@ jobs:
           if compgen -G 'dist/*.sha256' > /dev/null; then
             FILES+=(dist/*.sha256)
           fi
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "${FILES[@]}" --clobber
+          # 打 tag 就是发版，不再留草稿等人点发布；只有预发布号（-alpha/-beta/-rc）才打 prerelease 标记。
+          if [[ "$TAG" == *-* ]]; then
+            FLAGS=(--prerelease --latest=false)
           else
-            gh release create "$TAG" "${FILES[@]}" --verify-tag --title "WuwaTappo Full Community $TAG" --notes-file /tmp/release-notes.md --draft --prerelease
+            FLAGS=(--prerelease=false --latest)
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # 已存在时补齐文件并同步说明/发布状态：手建的空壳、上次跑剩的草稿都能被重跑修正。
+            gh release upload "$TAG" "${FILES[@]}" --clobber
+            gh release edit "$TAG" --title "WuwaTappo Full Community $TAG" --notes-file /tmp/release-notes.md --draft=false "${FLAGS[@]}"
+          else
+            gh release create "$TAG" "${FILES[@]}" --verify-tag --title "WuwaTappo Full Community $TAG" --notes-file /tmp/release-notes.md "${FLAGS[@]}"
           fi

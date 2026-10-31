@@ -43,9 +43,9 @@ git tag v1.2.1
 git push origin v1.2.1
 ```
 
-Release 工作流构建 ZIP / DMG 后创建 **Draft / Pre-release**，不会直接公开。到 Releases 核对版本、附件、说明后再手动 Publish。
+Release 工作流构建完两个平台后**直接发布**。要人工把关就在推标签之前做完——推出去就没有草稿缓冲区了（1.2.3 之前是草稿 + 预发布，需要手动点 Publish）。
 
-如果不使用 Actions，也可在 GitHub 手动创建 `v1.2.1` 草稿预发布，附上 `release-assets/` 内的两个文件，并使用 [发布说明](RELEASE_NOTES_1.2.1.md)。这两个本地产物来自迁移前的 1.0.2 整合构建，不是 1.0.3 分支产物；源代码后续若有行为变更，必须重新构建附件。
+如果不使用 Actions，也可在 GitHub 手动创建 `v1.2.1` 预发布，附上 `release-assets/` 内的两个文件，并使用 [发布说明](RELEASE_NOTES_1.2.1.md)。手动创建不会补齐四件产物，也没人替你校验版本号，只适合应急。这两个本地产物来自迁移前的 1.0.2 整合构建，不是 1.0.3 分支产物；源代码后续若有行为变更，必须重新构建附件。
 
 ## 后续版本
 
@@ -55,21 +55,30 @@ Release 工作流构建 ZIP / DMG 后创建 **Draft / Pre-release**，不会直�
 
 当前整合版版本号为 **1.2.3**，适配内容和待验收项见 [实验记录](OFFICIAL_1.0.3.md)。`dev` 从 `main` 派生并持续构建。
 
-**发版只能靠推标签触发，不要在网页上手动创建 Release。** GitHub 对「创建 Release 时顺带新建的 tag」不发 `push` 事件，工作流根本不会启动，结果就是一个没有任何产物的空 Release。正确顺序：
+**发版只能靠推标签触发，不要在网页上手动创建 Release。** GitHub 对「创建 Release 时顺带新建的 tag」不发 `push` 事件，工作流根本不会启动；手建的同名 Release 还会占住列表位置，让自动产出的附件藏进草稿里看不见。正确顺序：
 
 ```bash
 # 1. 版本号必须和 package.json 一致；package-lock / Cargo / 两份 tauri.conf 一起改
 # 2. 提交并推送
 git add -A && git commit -m "release: 1.2.3" && git push
-# 3. 推标签，触发 Release 工作流（两个平台都构建成功才会建草稿发布）
+# 3. 推标签，触发 Release 工作流
 git tag v1.2.3 && git push origin v1.2.3
 ```
 
-工作流产出的 Release 一定是**草稿 + 预发布**，并带齐四件产物：
+推完标签就不用再动手：`publish` 会构建两个平台、校验四件产物齐全，然后直接发布。版本号决定发布形态：
+
+| 标签 | Release 状态 |
+|---|---|
+| `v1.2.3` | 正式发布，自动成为 Latest |
+| `v1.3.0-alpha.1` / `-beta.1` / `-rc.1` | Pre-release，不抢 Latest |
+
+四件产物缺一不可：
+
 `WuwaTappo-Full-CN-Community-<ver>-macOS-arm64.dmg`、`WuwaTappo-Full-Global-Community-<ver>-macOS-arm64.dmg`、
 `WuwaTappo-Full-CN-Community-Windows-x64-<ver>.exe`、`WuwaTappo-Full-Global-Community-Windows-x64-<ver>.exe`。
-验收后再手动点 Publish。标签名与 `package.json` 版本不一致时，`publish` 步骤会直接失败，不会产出半成品。
 
-标签已经存在但工作流没跑（例如上面那种网页建 Release 的情况），可以用 `Actions → Release → Run workflow` 手动指定标签补跑。
+标签名与 `package.json` 版本不一致、或缺任何一个平台产物，`publish` 会直接失败，不会产出半套。
 
-`dev` 分支每次 CI 成功后会自动更新 [dev 预发布](https://github.com/alexzhong233/WuwaTappo-Full-Community/releases/tag/dev)。正式发布时从 `main` 或经过验收的提交创建 `v*` 标签；Release 工作流会**先构建两个平台**，四个产物（两服 × macOS dmg / Windows exe）齐全才创建草稿预发布——缺任何一个平台就不发版，维护者确认后点击 Publish.
+标签已经存在但工作流没跑（或跑在旧版工作流上），用 `Actions → Release → Run workflow` 填标签补跑。同 tag 的 Release 已存在时，重跑会补齐文件、同步说明并把草稿转正，所以「网页上手建错了」也能靠补跑修回来。
+
+`dev` 分支每次 CI 成功后会自动更新 [dev 预发布](https://github.com/alexzhong233/WuwaTappo-Full-Community/releases/tag/dev)，与上面这条正式发版链互不影响。

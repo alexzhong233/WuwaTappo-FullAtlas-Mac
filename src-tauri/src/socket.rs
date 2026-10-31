@@ -472,4 +472,127 @@ mod tests {
             ("bootstrap", "tauri://localhost"),
             ("main", "https://example.com"),
             ("main", "http://tauri.localhost:43127"),
-    
+            ("main", "tauri://foreign"),
+        ] {
+            assert!(validate_caller(label, &Url::parse(url).unwrap()).is_err());
+        }
+    }
+
+    #[test]
+    fn subprotocol_and_close_inputs_follow_websocket_rules() {
+        let url = validate_destination(Region::Cn, &format!("wss://{HOST}/socket.io/")).unwrap();
+        assert_eq!(
+            request_for(&url, &["sample.v1".into()]).unwrap().headers()
+                [header::SEC_WEBSOCKET_PROTOCOL],
+            "sample.v1"
+        );
+        assert!(request_for(&url, &["a,b".into()]).is_err());
+        assert!(request_for(&url, &["same".into(), "same".into()]).is_err());
+        assert!(close_frame(Some(1000), String::new()).is_ok());
+        assert!(close_frame(Some(3001), "done".into()).is_ok());
+        assert!(close_frame(Some(1006), String::new()).is_err());
+        assert!(close_frame(Some(1000), "x".repeat(124)).is_err());
+    }
+
+    #[test]
+    fn window_cleanup_aborts_only_its_connections_and_shutdown_clears_the_rest() {
+        let state = SocketState::default();
+        let mut handles = Vec::new();
+        for label in ["main", "panel"] {
+            let (sender, _receiver) = mpsc::channel(1);
+            let (abort, _registration) = AbortHandle::new_pair();
+            handles.push(abort.clone());
+            state.connections.lock().unwrap().insert(
+                (label.into(), "synthetic".into()),
+                Connection {
+                    commands: sender,
+                    abort,
+                    events: Channel::new(|_| Ok(())),
+                    generation: Arc::new(()),
+                },
+            );
+        }
+        remove_connections(&state, Some("panel"));
+        assert_eq!(state.connections.lock().unwrap().len(), 1);
+        assert!(!handles[0].is_aborted());
+        assert!(handles[1].is_aborted());
+        remove_connections(&state, None);
+        assert!(state.connections.lock().unwrap().is_empty());
+        assert!(handles[0].is_aborted());
+    }
+
+    #[tokio::test]
+    async fn local_transport_round_trip_preserves_text_binary_and_close() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut socket = tokio_tungstenite::accept_async(stream).await.unwrap();
+            socket.send(Message::Text("hello".into())).await.unwrap();
+            socket
+                .send(Message::Binary(vec![1, 2, 3].into()))
+                .await
+                .unwrap();
+            assert_eq!(
+                socket.next().await.unwrap().unwrap(),
+                Message::Text("sent".into())
+            );
+            socket
+                .close(Some(CloseFrame {
+                    code: 1000.into(),
+                    reason: "done".into(),
+                }))
+                .await
+                .unwrap();
+            let _ = socket.next().await;
+        });
+        let (events_sender, mut received) = mpsc::unbounded_channel();
+        let events = Channel::new(move |body| {
+            if let tauri::ipc::InvokeResponseBody::Json(value) = body {
+                let value: serde_json::Value = serde_json::from_str(&value).unwrap();
+                let _ = events_sender.send(value);
+            }
+            Ok(())
+        });
+        let request = request_for(
+            &Url::parse(&format!("ws://{address}/socket.io/")).unwrap(),
+            &[],
+        )
+        .unwrap();
+        let (sender, receiver) = mpsc::channel(4);
+        let client = tokio::spawn(run_connection(request, events, receiver));
+        async fn next(
+            received: &mut mpsc::UnboundedReceiver<serde_json::Value>,
+        ) -> serde_json::Value {
+            tokio::time::timeout(Duration::from_secs(2), received.recv())
+                .await
+                .unwrap()
+                .unwrap()
+        }
+        assert_eq!(next(&mut received).await["type"], "open");
+        assert_eq!(next(&mut received).await["data"], "hello");
+        assert_eq!(
+            next(&mut received).await["data"],
+            serde_json::json!([1, 2, 3])
+        );
+        let (reply, result) = oneshot::channel();
+        sender
+            .send(Command::Send(Message::Text("sent".into()), reply))
+            .await
+            .unwrap();
+        result.await.unwrap().unwrap();
+        let closed = next(&mut received).await;
+        assert_eq!(closed["type"], "close");
+        assert_eq!(closed["code"], 1000);
+        assert_eq!(closed["reason"], "done");
+        assert_eq!(closed["wasClean"], true);
+        tokio::time::timeout(Duration::from_secs(2), client)
+            .await
+            .unwrap()
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(2), server)
+            .await
+            .unwrap()
+            .unwrap();
+    }
+}

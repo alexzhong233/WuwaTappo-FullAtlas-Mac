@@ -17,7 +17,7 @@ jobs:
   publish:
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main'
+      github.event.workflow_run.head_branch == 'dev'
     runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ github.token }}
@@ -29,7 +29,6 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
-          persist-credentials: false
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
@@ -41,6 +40,8 @@ jobs:
           gh run download "$RUN_ID" --repo "$GH_REPO" --name WuwaTappo-FullAtlas-Mac-arm64 --dir dist
           PACKAGES=(dist/*.zip dist/*.dmg)
           [[ ${#PACKAGES[@]} -eq 2 && -f "${PACKAGES[0]}" && -f "${PACKAGES[1]}" ]]
+      - name: Point dev tag at CI commit
+        run: git push --force origin "$HEAD_SHA:refs/tags/$TAG"
       - name: Create or update rolling dev release
         run: |
           set -euo pipefail
@@ -54,7 +55,7 @@ jobs:
           官方国服资源：${OFFICIAL}
           源码提交：${HEAD_SHA}
 
-          这是随 main 分支持续更新的开发预发布版本，仅用于测试。
+          这是随 dev 分支持续更新的开发预发布版本，仅用于测试。
           EOF
           if gh release view "$TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/*.zip dist/*.dmg --repo "$GH_REPO" --clobber

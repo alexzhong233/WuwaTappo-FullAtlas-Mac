@@ -49,7 +49,14 @@
 ```bash
 xcode-select --install
 brew install node@24 sevenzip
-# 安装 rustup 后，在源码根目录执行：
+# Homebrew 当前提供 rustup 管理器，不再提供 rustup-init。
+brew install rustup
+echo 'export PATH="$(brew --prefix rustup)/bin:$PATH"' >> ~/.zshrc
+export PATH="$(brew --prefix rustup)/bin:$PATH"
+rustup toolchain install 1.97.1 --profile minimal
+rustup default 1.97.1
+
+# 在源码根目录执行：
 npm ci
 npm run setup
 npm test

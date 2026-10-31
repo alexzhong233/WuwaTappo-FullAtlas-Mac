@@ -1,0 +1,576 @@
+{
+  "schemaVersion": 1,
+  "sourceApplication": {
+    "name": "Wuwa Tappo",
+    "region": "CN",
+    "entryModule": "index-DsnG26DH.js",
+    "version": "1.0.2",
+    "frontend": "Vue / Tauri 2.10.3"
+  },
+  "runtimeConstants": {
+    "clickCacheEnvironment": "cn-cn-prod",
+    "maxSafeClickCount": 9007199254740991,
+    "defaultPosition": "bottomRight",
+    "hotkeys": {
+      "switchDisplay": [
+        "F8",
+        "f8"
+      ],
+      "toggleVisibility": [
+        "F9",
+        "f9"
+      ],
+      "secondaryAction": [
+        "F4",
+        "f4"
+      ],
+      "devtools": [
+        "F5",
+        "f5"
+      ]
+    }
+  },
+  "bootContract": {
+    "entry": "index.html -> index-DsnG26DH.js router / -> index-CAndEweT.js onMounted",
+    "routes": {
+      "main": "/",
+      "panel": "/panel",
+      "login": "/login",
+      "update": "/update",
+      "toast": "/toast",
+      "ossNotice": "/oss-notice",
+      "about": "/about",
+      "installer": "/installer",
+      "uninstaller": "/uninstaller"
+    },
+    "requiredResponses": [
+      "is_internal_testing_build",
+      "is_devtools_hotkeys_build",
+      "get_main_desktop_safe_area",
+      "get_main_taskbar_insets",
+      "load_key_press_count",
+      "load_cumulative_click_count"
+    ],
+    "requiredWindowMutations": [
+      "set_main_force_cursor_ignore",
+      "set_main_window_fullscreen_shell",
+      "apply_main_window_position",
+      "set_main_window_content_bounds",
+      "set_main_hit_region"
+    ],
+    "inputRegistration": [
+      "mouse-move",
+      "mouse-button",
+      "global-clap-mouse",
+      "key-press",
+      "key-release",
+      "gamepad-button-press"
+    ],
+    "auth": "Frontend preserves official HTTP/Socket.IO account, inventory, rewards, and room protocols. Native backend owns window/event transport, not account emulation."
+  },
+  "nativeAliases": [
+    {
+      "file": "appAutostart-CVnAsS9A.js",
+      "name": "y",
+      "role": "listen"
+    },
+    {
+      "file": "appAutostart-CVnAsS9A.js",
+      "name": "p",
+      "role": "emit"
+    },
+    {
+      "file": "appAutostart-CVnAsS9A.js",
+      "name": "_",
+      "role": "invoke"
+    },
+    {
+      "file": "index-B4yr8KUa.js",
+      "name": "i",
+      "role": "invoke"
+    },
+    {
+      "file": "index-CAndEweT.js",
+      "name": "Ct",
+      "role": "invoke"
+    },
+    {
+      "file": "index-CAndEweT.js",
+      "name": "pt",
+      "role": "listen"
+    },
+    {
+      "file": "index-Cbcn3ySG.js",
+      "name": "B",
+      "role": "listen"
+    },
+    {
+      "file": "index-D7ueDIgS.js",
+      "name": "M",
+      "role": "listen"
+    },
+    {
+      "file": "index-DH_DNc-i.js",
+      "name": "tn",
+      "role": "invoke"
+    },
+    {
+      "file": "index-DH_DNc-i.js",
+      "name": "Dn",
+      "role": "listen"
+    },
+    {
+      "file": "index-Dm9XLOYA.js",
+      "name": "F",
+      "role": "invoke"
+    },
+    {
+      "file": "index-DsnG26DH.js",
+      "name": "invoke$1",
+      "role": "invoke"
+    },
+    {
+      "file": "index-DsnG26DH.js",
+      "name": "listen",
+      "role": "listen"
+    },
+    {
+      "file": "index-DsnG26DH.js",
+      "name": "once",
+      "role": "once"
+    },
+    {
+      "file": "index-DsnG26DH.js",
+      "name": "emit",
+      "role": "emit"
+    },
+    {
+      "file": "index-DsnG26DH.js",
+      "name": "emitTo",
+      "role": "emitTo"
+    },
+    {
+      "file": "index-DsnG26DH.js",
+      "name": "invoke",
+      "role": "invoke"
+    },
+    {
+      "file": "modalBridge-XRMnG1Hr.js",
+      "name": "a",
+      "role": "emit"
+    },
+    {
+      "file": "modalBridge-XRMnG1Hr.js",
+      "name": "o",
+      "role": "listen"
+    },
+    {
+      "file": "modalWindows-TgT7e7nx.js",
+      "name": "n",
+      "role": "invoke"
+    },
+    {
+      "file": "quitApp-D9Qe8LRS.js",
+      "name": "r",
+      "role": "invoke"
+    },
+    {
+      "file": "switchDisplayMonitor-CH1c_9nU.js",
+      "name": "f",
+      "role": "invoke"
+    },
+    {
+      "file": "switchDisplayMonitor-CH1c_9nU.js",
+      "name": "g",
+      "role": "emit"
+    },
+    {
+      "file": "switchDisplayMonitor-CH1c_9nU.js",
+      "name": "F",
+      "role": "listen"
+    },
+    {
+      "file": "useLogin-CHDQXIa7.js",
+      "name": "N",
+      "role": "invoke"
+    }
+  ],
+  "commands": [
+    {
+      "name": "apply_main_window_position",
+      "kind": "application",
+      "scopes": [
+        "application-runtime"
+      ],
+      "callSites": [
+        {
+          "file": "index-DH_DNc-i.js",
+          "charRange": [
+            11134,
+            11226
+          ],
+          "byteRange": [
+            11154,
+            11246
+          ],
+          "line": 2,
+          "function": "Ot",
+          "source": "tn(\"apply_main_window_position\",{payload:{alwaysOnTop:sn,position:g.value,applyPosition:w}})",
+          "context": "alue)}catch{He(n(\"setting_autostart_fail\")),N.value=await Xt()}finally{k.value=!1}}}async function Ot(w){Ve();try{await tn(\"apply_main_window_position\",{payload:{alwaysOnTop:sn,position:g.value,applyPosition:w}}),w&&go(\"corner-applied\")}catch(o){console.error(\"应用设置失败:\",o)}}async function Ms(){if(!(!le||ce.value)){nn(),ce.value=!0,ge.value=n(\"setting_version_checking\");try{const w=await on({interactive:!0});if(w.kind===\"none\"){Vt(),ge.valu",
+          "callee": "tn",
+          "role": "invoke",
+          "arguments": {
+            "type": "object",
+            "properties": {
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "alwaysOnTop": {
+                    "type": "boolean",
+                    "value": true
+                  },
+                  "position": {
+                    "type": "expression",
+                    "source": "g.value"
+                  },
+                  "applyPosition": {
+                    "type": "expression",
+                    "source": "w"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "file": "switchDisplayMonitor-CH1c_9nU.js",
+          "charRange": [
+            2631,
+            2717
+          ],
+          "byteRange": [
+            2645,
+            2731
+          ],
+          "line": 1,
+          "function": "vt",
+          "source": "f(\"apply_main_window_position\",{payload:{alwaysOnTop:ct,position:i,applyPosition:!1}})",
+          "context": "console.error(\"[main-window-pos] clamp failed\",t),!1}}async function vt(t,e){const n=st(),i=n.position;{await J(),await f(\"apply_main_window_position\",{payload:{alwaysOnTop:ct,position:i,applyPosition:!1}});const a=e?.snapDockToContentOrigin;if(a)try{const o=await _t(),c=A(),r=await c.scaleFactor(),u=await c.innerSize(),w=lt(i,n.petScale,u.width/r,u.height/r,o);a(w.left,w.top)}catch(o){console.warn(\"[main-window-pos] fullscreen dock",
+          "callee": "f",
+          "role": "invoke",
+          "arguments": {
+            "type": "object",
+            "properties": {
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "alwaysOnTop": {
+                    "type": "boolean",
+                    "value": true
+                  },
+                  "position": {
+                    "type": "expression",
+                    "source": "i"
+                  },
+                  "applyPosition": {
+                    "type": "boolean",
+                    "value": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "response": {
+        "type": "null",
+        "consumption": "await-only"
+      },
+      "request": {
+        "type": "object",
+        "properties": {
+          "payload": {
+            "type": "object",
+            "properties": {
+              "alwaysOnTop": {
+                "type": "boolean"
+              },
+              "position": {
+                "type": "string",
+                "enum": [
+                  "topLeft",
+                  "topRight",
+                  "bottomLeft",
+                  "bottomRight"
+                ]
+              },
+              "applyPosition": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "check_app_update",
+      "kind": "application",
+      "scopes": [
+        "application-runtime"
+      ],
+      "callSites": [
+        {
+          "file": "index-DsnG26DH.js",
+          "charRange": [
+            545868,
+            545909
+          ],
+          "byteRange": [
+            568562,
+            568603
+          ],
+          "line": 68,
+          "function": "checkForAppUpdate",
+          "source": "invoke$1(\"check_app_update\",{endpoint:n})",
+          "context": "eturn cachedUpdate=null,e?.interactive?{kind:\"error\",message:\"更新资源地址尚未就绪\"}:{kind:\"none\",currentVersion:t};const s=await invoke$1(\"check_app_update\",{endpoint:n});if(!s)return cachedUpdate=null,{kind:\"none\",currentVersion:t};const o=new Update(s);return cachedUpdate=o,{kind:\"available\",currentVersion:t,update:o}}catch(t){cachedUpdate=null;const n=t instanceof Error?t.message:String(t);if(l",
+          "callee": "invoke$1",
+          "role": "invoke",
+          "arguments": {
+            "type": "object",
+            "properties": {
+              "endpoint": {
+                "type": "expression",
+                "source": "n"
+              }
+            }
+          }
+        }
+      ],
+      "response": {
+        "anyOf": [
+          {
+            "type": "null"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "rid": {
+                "type": "number"
+              },
+              "currentVersion": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              },
+              "date": {
+                "type": "string",
+                "optional": true
+              },
+              "body": {
+                "type": "string",
+                "optional": true
+              },
+              "rawJson": {
+                "type": "object"
+              }
+            }
+          }
+        ]
+      },
+      "request": {
+        "type": "object",
+        "properties": {
+          "endpoint": {
+            "type": "string"
+          }
+        }
+      },
+      "notes": "A non-null result must be a real updater resource; the frontend constructs Update and uses rid with plugin:updater commands."
+    },
+    {
+      "name": "close_about_window",
+      "kind": "application",
+      "scopes": [
+        "application-runtime"
+      ],
+      "callSites": [
+        {
+          "file": "modalWindows-TgT7e7nx.js",
+          "charRange": [
+            580,
+            603
+          ],
+          "byteRange": [
+            580,
+            603
+          ],
+          "line": 1,
+          "function": "u",
+          "source": "n(\"close_about_window\")",
+          "context": "unction _(){await n(\"close_oss_notice_window\")}async function p(){await n(\"open_about_window\")}async function u(){await n(\"close_about_window\")}export{u as closeAboutWindow,w as closeLoginWindow,_ as closeOssNoticeWindow,s as closeUpdateWindow,p as openAboutWindow,a as openLoginWindow,d as openOssNoticeWindow,e as openUpdateWindow,c as resizeLoginWindowToContent};\n",
+          "callee": "n",
+          "role": "invoke",
+          "arguments": {
+            "type": "undefined"
+          }
+        }
+      ],
+      "response": {
+        "type": "null",
+        "consumption": "await-only"
+      }
+    },
+    {
+      "name": "close_login_window",
+      "kind": "application",
+      "scopes": [
+        "application-runtime"
+      ],
+      "callSites": [
+        {
+          "file": "modalWindows-TgT7e7nx.js",
+          "charRange": [
+            172,
+            195
+          ],
+          "byteRange": [
+            172,
+            195
+          ],
+          "line": 1,
+          "function": "w",
+          "source": "n(\"close_login_window\")",
+          "context": "on a(o){const i=o?.intent??\"login\";await n(\"open_login_window\",{intent:i,compact:i===\"login\"})}async function w(){await n(\"close_login_window\")}async function c(o,i){await n(\"resize_login_window_to_content\",{payload:{width:o,height:i}})}async function e(o){await n(\"open_update_window\",{detail:o})}async function s(){await n(\"close_update_window\")}async function d(){await ",
+          "callee": "n",
+          "role": "invoke",
+          "arguments": {
+            "type": "undefined"
+          }
+        }
+      ],
+      "response": {
+        "type": "null",
+        "consumption": "await-only"
+      }
+    },
+    {
+      "name": "close_oss_notice_window",
+      "kind": "application",
+      "scopes": [
+        "application-runtime"
+      ],
+      "callSites": [
+        {
+          "file": "modalWindows-TgT7e7nx.js",
+          "charRange": [
+            478,
+            506
+          ],
+          "byteRange": [
+            478,
+            506
+          ],
+          "line": 1,
+          "function": "_",
+          "source": "n(\"close_oss_notice_window\")",
+          "context": "nction s(){await n(\"close_update_window\")}async function d(){await n(\"open_oss_notice_window\")}async function _(){await n(\"close_oss_notice_window\")}async function p(){await n(\"open_about_window\")}async function u(){await n(\"close_about_window\")}export{u as closeAboutWindow,w as closeLoginWindow,_ as closeOssNoticeWindow,s as closeUpdateWindow,p as openAboutWindow,a as openLo",
+          "callee": "n",
+          "role": "invoke",
+          "arguments": {
+            "type": "undefined"
+          }
+        }
+      ],
+      "response": {
+        "type": "null",
+        "consumption": "await-only"
+      }
+    },
+    {
+      "name": "close_panel_window",
+      "kind": "application",
+      "scopes": [
+        "application-runtime"
+      ],
+      "callSites": [
+        {
+          "file": "appAutostart-CVnAsS9A.js",
+          "charRange": [
+            5553,
+            5576
+          ],
+          "byteRange": [
+            5553,
+            5576
+          ],
+          "line": 2,
+          "function": "zt",
+          "source": "_(\"close_panel_window\")",
+          "context": "turn y(q,()=>{e()})}async function Wt(e){await _(\"open_panel_window\",{payload:{tab:e??null}})}async function zt(){await _(\"close_panel_window\")}async function qt(){await _(\"raise_panel_window_above_pets\")}let O=Promise.resolve();function xt(e){const t=O.then(()=>_(\"set_panel_window_collapsed\",{payload:{collapsed:e}}));return O=t.catch(()=>{}),t}const x=5;function Vt(e,t)",
+          "callee": "_",
+          "role": "invoke",
+          "arguments": {
+            "type": "undefined"
+          }
+        }
+      ],
+      "response": {
+        "type": "null",
+        "consumption": "await-only"
+      }
+    },
+    {
+      "name": "close_update_window",
+      "kind": "application",
+      "scopes": [
+        "application-runtime"
+      ],
+      "callSites": [
+        {
+          "file": "modalWindows-TgT7e7nx.js",
+          "charRange": [
+            375,
+            399
+          ],
+          "byteRange": [
+            375,
+            399
+          ],
+          "line": 1,
+          "function": "s",
+          "source": "n(\"close_update_window\")",
+          "context": "nt\",{payload:{width:o,height:i}})}async function e(o){await n(\"open_update_window\",{detail:o})}async function s(){await n(\"close_update_window\")}async function d(){await n(\"open_oss_notice_window\")}async function _(){await n(\"close_oss_notice_window\")}async function p(){await n(\"open_about_window\")}async function u(){await n(\"close_about_window\")}export{u as closeAboutWin",
+          "callee": "n",
+          "role": "invoke",
+          "arguments": {
+            "type": "undefined"
+          }
+        }
+      ],
+      "response": {
+        "type": "null",
+        "consumption": "await-only"
+      }
+    },
+    {
+      "name": "exit_app",
+      "kind": "application",
+      "scopes": [
+        "application-runtime"
+      ],
+      "callSites": [
+        {
+          "file": "quitApp-D9Qe8LRS.js",
+          "charRange": [
+            113,
+            126
+          ],
+          "byteRange": [
+            113,
+            126
+          ],
+          "line": 1,
+          "function": "o",
+          "source": "r(\"exit_app\")",
+          "context": "import{dM as a,dN as e,p as r,dO as i}from\"./index-DsnG2

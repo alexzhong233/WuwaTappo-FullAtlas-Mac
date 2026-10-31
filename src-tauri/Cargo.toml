@@ -1,6 +1,6 @@
 [package]
 name = "wuwatappo-mac"
-version = "1.2.1"
+version = "1.2.2-alpha.1"
 edition = "2021"
 rust-version = "1.85"
 
@@ -10,6 +10,7 @@ crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]
 tauri-build = { version = "=2.7.1", features = [] }
+serde_json = "1"
 
 [dependencies]
 chrono = { version = "0.4", features = ["clock"] }

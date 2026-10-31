@@ -54,7 +54,7 @@ function localStartOnlineServices() {
  loaderModule.init(kurodataConfig); window.kurodata = loaderModule;
  initTrackCommonProps(); initFrontendAlertReporting();
 }''')
-for name in ['invoke$1', 'invoke']:
+for name in (['invoke'] if config['client_version'] == '1.0.3' else ['invoke$1', 'invoke']):
     anchor = f'async function {name}(e, t = {{}}, n) {{'
     shared = replace(shared, anchor, anchor + '\n window.__WUWA_LOCAL_ATLAS__?.checkInvoke(e, t);')
 for name in ['ensureAppearanceAssetCatalog(e)']:
@@ -185,7 +185,7 @@ edits = [(0, 0, f'import {{zzLocalAtlas as __lg}} from "./{shared_name}";\n'),
          (container['array'] + 1, container['array'] + 1, row)]
 panel_root = next(c for c in p['components'] if c['name'] == 'index')
 root_source = panel[panel_root['body']:panel_root['bodyEnd']]
-state_ref = re.search(r'const ([\w$]+) = ' + re.escape(pi['ref']) + r'\(null\)', root_source)
+state_ref = re.search(r'(?:const |,\s*)([\w$]+) = ' + re.escape(pi['ref']) + r'\(null\)', root_source)
 assert state_ref, 'Panel snapshot state declaration changed'
 ready_retry = f'''
 let __panelDisposed=false;
@@ -209,7 +209,7 @@ assert match, 'Favorite toggle layout changed'
 panel = panel[:match.start()] + f'__lg.enabled.value ? __lg.favorite({match[3]}.item.asset_id,!{match[1]}.value) : ' + panel[match.start():]
 
 from integrate_assistant import integrate
-assert config['client_version'] == '1.0.2', 'Desktop assistant requires the verified 1.0.2 adapter'
+assert config['client_version'] in ('1.0.2', '1.0.3'), 'Desktop assistant requires a reviewed adapter'
 shared, main, panel = integrate(PROJECT, BASE, frontend, structure, shared, main, panel, main_name, panel_name)
 extra_patched_assets = [p.name for p in (BASE/'frontend/assets').glob('switchDisplayMonitor-*.js')
                         if (frontend/'assets'/p.name).read_bytes() != p.read_bytes()]

@@ -8,8 +8,11 @@ import { parse } from 'acorn';
 // The upstream adapter uses parsed bindings and rejects unknown 1.0.2 layouts.
 // Keep macOS patches first, then structurally integrate the original FullAtlas UI.
 export function verifiedAdapterVersion(lock) {
-  if (lock.region !== 'CN' || lock.version !== '1.0.2'
-    || lock.installer?.sha256 !== '152d8ac4847f1b4641a750c45b680091c5a7cf92cb6059cd6d97e803f6eb5487') {
+  const reviewed = {
+    '1.0.2': '152d8ac4847f1b4641a750c45b680091c5a7cf92cb6059cd6d97e803f6eb5487',
+    '1.0.3': '29b6f4aaeb0ad4db5a8002e3686435692fa0ddb88ea9389e89b53fb93932136e',
+  };
+  if (lock.region !== 'CN' || !Object.hasOwn(reviewed, lock.version) || lock.installer?.sha256 !== reviewed[lock.version]) {
     throw new Error('FullAtlas: official version or installer digest has no verified Mac adapter; review upstream changes before building');
   }
   return lock.version;

@@ -1,5 +1,7 @@
 # WuwaTappo FullAtlas Mac
 
+> 当前为 `official-1.0.3` 实验分支：整合版 **1.2.2-alpha.1**，基于官方国服 **1.0.3**。已完成测试、构建与基础窗口检查，尚未完成账号及输入权限实机验收。`main` 保留基于官方 1.0.2 的 1.2.1 预览版。详见 [1.0.3 适配记录](docs/OFFICIAL_1.0.3.md)。
+
 让《鸣潮》桌宠在 Mac 上运行，并在原有面板中加入本地全图鉴和桌面助手。
 
 基于 [wuwa-tappo-mac](https://github.com/Last-emo-boy/wuwa-tappo-mac) 的 Rust / Tauri macOS 后端，以及 [WuwaTappo-FullAtlas](https://github.com/Averionx/WuwaTappo-FullAtlas) 的图鉴和助手功能开发。无需 Windows、Wine 或虚拟机。本项目为非官方社区整合版，与库洛官方及两个上游项目的发行渠道独立。
@@ -10,9 +12,9 @@
 | --- | --- |
 | 服务区域 | 国服；国际服代码保留自上游，未整合 FullAtlas，不作为本项目发行目标 |
 | 系统 | Apple Silicon（M 系列），macOS 13 及以上 |
-| 整合版本 | 1.2.1 预览版，基于官方国服 1.0.2 与 FullAtlas v1.2 |
-| 官方 1.0.3 | 在 `official-1.0.3` 分支进行兼容性适配，状态见分支文档 |
-| 验证 | 已通过自动化测试、原生构建、签名检查和 ZIP / DMG 校验；登录、输入授权、图鉴切换及联机仍需实机验收 |
+| 整合版本 | 1.2.2-alpha.1 实验版，基于官方国服 1.0.3 与 FullAtlas v1.2 |
+| 分支 | `official-1.0.3`；`main` 仍为 1.0.2 基底 |
+| 验证 | 自动测试、原生构建、签名与 ZIP / DMG 校验通过；角色和设置面板可显示，完整业务仍需实机验收 |
 | 签名 | Ad hoc 临时签名，未通过 Apple 公证 |
 
 ## 功能
@@ -35,6 +37,8 @@
 4. 在设置中切换「本地全图鉴」，通过「挂机与统计」打开助手面板。首次使用请先验收普通登录和图鉴显示，再启用自动任务。
 
 更新时退出旧版，再覆盖同名应用。若更新后输入失效，请检查输入监控条目并重新授权。此整合版使用独立应用标识，不会自动迁移原 Mac 项目的钥匙串和用户数据。
+
+本项目的 1.2.1 与 1.2.2-alpha.1 使用相同应用标识和数据目录，试用前请退出另一个副本，并备份 `~/Library/Application Support/dev.w33d.wuwatappo.fullatlas.mac/`。实验版目前仅提供 Apple Silicon 构建。
 
 目前未实现 Mac 自动安装更新。请使用本项目的 Mac 包；官方 Windows EXE 和 FullAtlas Windows 更新 ZIP 不能用于此应用。
 
@@ -64,12 +68,15 @@ npm run package
 官方客户端程序、公开图鉴数据、FullAtlas 功能代码分别维护：
 
 - `npm run upstream:check` 只检查官方客户端版本；`npm run upstream:update` 会下载候选版本并修改官方资源锁，需要在适配分支执行。
+- `npm run official:update` 是本地一键编排入口：默认只检测；`npm run official:update -- --apply` 才会下载并校验官方安装包、静态提取、注入 FullAtlas、运行测试、构建和打包 ZIP / DMG。失败会恢复更新前的资源锁和前端；未知前端结构会被版本门禁拦截。
 - 应用内的「更新本地图鉴」刷新目录数据，不升级程序或接口适配器。
 - `.github/workflows/sync-upstream.yml` 每日 **10:17（北京时间）** 检查国服更新。经静态提取、接口差异、测试、构建与打包验证后创建更新 PR；不兼容候选保持草稿，不自动合并。
 - FullAtlas 集成器同时核对官方版本和安装包摘要。未知版本不会只靠修改版本号进入正式构建。
 - CI 只构建国服整合版。版本标签触发的 Release 工作流只生成**草稿预发布**，需要维护者验收后手动发布。
 
-在你的仓库启用 Actions 后这些工作流才会运行。定时同步需要在仓库设置中允许 Actions 创建 Pull Request，首次发布步骤见 [GitHub 发布指南](docs/PUBLISHING.md)。[来源与更新记录](docs/official-update-status-2026-10-30.md) 保留本次核验信息。
+在你的仓库启用 Actions 后这些工作流才会运行。定时同步需要在仓库设置中允许 Actions 创建 Pull Request，首次发布步骤见 [GitHub 发布指南](docs/PUBLISHING.md)。[官方更新流水线](docs/OFFICIAL_UPDATE_PIPELINE.md) 和 [来源与更新记录](docs/official-update-status-2026-10-30.md) 保留实现边界与核验信息。
+
+这条流水线不能在已安装的 Mac 应用内部运行：官方提供的是 Windows EXE，转换需要 Node、7-Zip、Rust、Xcode 工具链和完整源码。桌宠可以检测并提示新 Mac Release，但下载、构建和替换应用必须由维护者或 GitHub Actions 完成。
 
 ## 隐私与许可
 

@@ -128,6 +128,51 @@ fn get_json(client: &reqwest::blocking::Client, url: Url) -> Result<Value, Strin
     }
     serde_json::from_slice(&bytes).map_err(|e| format!("图鉴 JSON 无效：{e}"))
 }
+
+fn official_update_status(region: crate::profile::Region) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .redirect(reqwest::redirect::Policy::none())
+        .user_agent("WuwaTappo-FullAtlas-Mac")
+        .build()
+        .map_err(|e| e.to_string())?;
+    let api = format!("https://{}", region.api_host());
+    let activity = get_json(
+        &client,
+        Url::parse(&format!("{api}/api/common/activity-config")).map_err(|e| e.to_string())?,
+    )?;
+    let host = activity
+        .pointer("/data/assets_host")
+        .and_then(Value::as_str)
+        .ok_or("官方版本检查缺少资源源")?
+        .trim_end_matches('/');
+    let host = trusted_asset_url(region, host)?;
+    let pointer = get_json(
+        &client,
+        trusted_asset_url(
+            region,
+            &format!("{}/app/json-host/{}", host, region.updater_host_file()),
+        )?,
+    )?;
+    let manifest_url = pointer
+        .get("url")
+        .and_then(Value::as_str)
+        .ok_or("官方版本检查缺少版本清单")?;
+    let manifest_url = trusted_asset_url(region, manifest_url)?;
+    let manifest = get_json(&client, manifest_url)?;
+    let latest = manifest
+        .get("version")
+        .and_then(Value::as_str)
+        .ok_or("官方版本清单无效")?;
+    let current = env!("WUWA_OFFICIAL_VERSION");
+    let changed = latest != current;
+    Ok(json!({
+        "currentVersion": current,
+        "latestVersion": latest,
+        "updateAvailable": changed,
+        "message": if changed { format!("检测到官方 {latest}，需要维护者重新适配并发布 Mac 包。") } else { format!("官方基底已是 {current}。") },
+    }))
+}
 fn validate_catalog(value: &Value) -> Result<(), String> {
     let atlas = value
         .get("atlas")
@@ -366,35 +411,4 @@ impl FullAtlasState {
                     }
                     let cutoff = (Local::now().date_naive() - Days::days(90)).to_string();
                     inner.saved.days.retain(|date, _| date >= &cutoff);
-                    inner.runtime.values = json!({"total":total,"balance":body.get("balance"),"logged_in":body.get("logged_in")==Some(&Value::Bool(true)),"chests":body.get("chests"),"local_atlas":inner.saved.enabled,"quiet":physical_quiet,"connected":true,"seen_at":unix_time()});
-                }
-                if action == "tick" {
-                    let allowed = inner.saved.settings.enabled
-                        && physical_quiet
-                        && inner.runtime.next_tick.is_none_or(|t| Instant::now() >= t);
-                    if allowed {
-                        inner.runtime.next_tick = Some(
-                            Instant::now()
-                                + Duration::from_secs_f64(
-                                    1.0 / f64::from(inner.saved.settings.speed),
-                                ),
-                        );
-                    }
-                    self.save(&mut inner, false)?;
-                    return Ok(
-                        json!({"allowed":allowed,"quiet":physical_quiet,"settings":inner.saved.settings,"session":inner.saved.session,"confirmed":inner.saved.confirmed,
-                        "flush_generation":if inner.runtime.flush_generation>inner.runtime.flush_done{inner.runtime.flush_generation}else{0},"update_required":false,"quit":false}),
-                    );
-                }
-            }
-            "reward" => {
-                let reward = body
-                    .get("reward")
-                    .and_then(Value::as_object)
-                    .ok_or("奖励必须是对象")?;
-                let id = reward
-                    .get("id")
-                    .and_then(Value::as_str)
-                    .filter(|v| !v.is_empty() && v.len() <= 120)
-                    .ok_or("奖励事件 ID 无效")?;
-                
+                    inner.runtime.values = json!({"total":total,"balance":body

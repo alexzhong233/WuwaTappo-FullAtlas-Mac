@@ -7,8 +7,8 @@ import { verifiedAdapterVersion } from '../scripts/fullatlas-frontend.mjs';
 
 test('FullAtlas accepts only the reviewed official version and exact installer digest', async () => {
   const lock = JSON.parse(await readFile(new URL('../upstream-cn.json', import.meta.url), 'utf8'));
-  assert.equal(verifiedAdapterVersion(lock), '1.0.2');
-  assert.throws(() => verifiedAdapterVersion({ ...lock, version: '1.0.3' }), /no verified Mac adapter/);
+  assert.equal(verifiedAdapterVersion(lock), '1.0.3');
+  assert.throws(() => verifiedAdapterVersion({ ...lock, version: '1.0.99' }), /no verified Mac adapter/);
   assert.throws(() => verifiedAdapterVersion({ ...lock, installer: { ...lock.installer, sha256: 'f'.repeat(64) } }), /no verified Mac adapter/);
   assert.throws(() => verifiedAdapterVersion({ ...lock, region: 'GLOBAL' }), /no verified Mac adapter/);
 });
@@ -30,5 +30,47 @@ test('prepared FullAtlas factory stays inactive in login and other auxiliary rou
       createLocalAtlasController: () => { throw new Error('Auxiliary route requested the FullAtlas bridge'); },
     });
     assert.equal(controller, null, route);
+  }
+});
+
+test('every prepared module imports exports that its actual dependency provides', async () => {
+  const { readdir } = await import('node:fs/promises');
+  const directory = new URL('../build/frontend/assets/', import.meta.url);
+  const modules = new Map();
+  for (const name of (await readdir(directory)).filter(name => name.endsWith('.js'))) {
+    const text = await readFile(new URL(name, directory), 'utf8');
+    const ast = parse(text, { sourceType: 'module', ecmaVersion: 'latest' });
+    const exports = new Set();
+    for (const node of ast.body) {
+      if (node.type === 'ExportNamedDeclaration') for (const item of node.specifiers) exports.add(item.exported.name);
+      if (node.type === 'ExportDefaultDeclaration') exports.add('default');
+    }
+    modules.set(name, { ast, exports });
+  }
+  for (const [name, { ast }] of modules) for (const node of ast.body) {
+    if (node.type !== 'ImportDeclaration' || !node.source.value.startsWith('./') || !node.source.value.endsWith('.js')) continue;
+    const target = modules.get(node.source.value.slice(2));
+    assert.ok(target, `${name}: missing ${node.source.value}`);
+    for (const item of node.specifiers) {
+      if (item.type === 'ImportNamespaceSpecifier') continue;
+      const binding = item.type === 'ImportDefaultSpecifier' ? 'default' : item.imported.name;
+      assert.ok(target.exports.has(binding), `${name}: ${node.source.value} does not export ${binding}`);
+    }
+  }
+});
+
+test('assistant chest timers bind to the official readiness computations after minifier renaming', async () => {
+  const structure = JSON.parse(await readFile(new URL('../build/fullatlas-adapter/base/js_structure.json', import.meta.url), 'utf8'));
+  const main = Object.entries(structure.files).find(([, meta]) => meta.snapshots.length === 1);
+  assert.ok(main);
+  const [name, meta] = main;
+  const original = await readFile(new URL(`../build/fullatlas-adapter/base/readable_js/assets/${name}`, import.meta.url), 'utf8');
+  const prepared = await readFile(new URL(`../build/frontend/assets/${name}`, import.meta.url), 'utf8');
+  const escape = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp('([\\w$]+) = ' + escape(meta.imports.computed) + '\\(\\(\\) => ([\\w$]+)\\.value \\|\\| !' + escape(meta.imports.globalStore) + '\\.isLoggedIn \\? !0 : ([\\w$]+)\\.value <= 0\\)', 'g');
+  const ready = [...original.matchAll(pattern)];
+  assert.equal(ready.length, 2);
+  for (const [index, side] of ['left', 'right'].entries()) {
+    assert.ok(prepared.includes(`${side}:{remaining:Math.max(0,${ready[index][3]}.value),ready:${ready[index][1]}.value}`), `${side}: assistant must read the same timer as the official readiness computation`);
   }
 });

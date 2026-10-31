@@ -17,6 +17,9 @@ const clickCount = { type: 'integer', minimum: 0, maximum: Number.MAX_SAFE_INTEG
 function commandContractsFor(clickCacheEnvironment) {
   const environment = { type: 'string', value: clickCacheEnvironment };
   return {
+    get_app_shortcuts: { response: object(Object.fromEntries(['gameMode', 'switchScreen', 'togglePet'].map(key => [key, object({ modifiers: number, key: number })]))) },
+    set_app_shortcuts: { request: object({ config: object(Object.fromEntries(['gameMode', 'switchScreen', 'togglePet'].map(key => [key, object({ modifiers: number, key: number })]))) }) },
+    set_shortcut_capture: { request: object({ active: boolean }) },
     apply_main_window_position: { request: object({ payload: object({ alwaysOnTop: boolean, position: { type: 'string', enum: ['topLeft', 'topRight', 'bottomLeft', 'bottomRight'] }, applyPosition: boolean }) }) },
     check_app_update: {
       request: object({ endpoint: string }), response: { anyOf: [{ type: 'null' }, object({ rid: number, currentVersion: string, version: string, date: optional(string), body: optional(string), rawJson: { type: 'object' } })] },
@@ -68,6 +71,8 @@ function commandContractsFor(clickCacheEnvironment) {
 }
 
 const nativeEventContracts = {
+  'app-shortcut': { payload: { type: 'string', enum: ['gameMode', 'switchScreen', 'togglePet'] } },
+  'app-shortcuts-changed': { payload: object(Object.fromEntries(['gameMode', 'switchScreen', 'togglePet'].map(key => [key, object({ modifiers: number, key: number })]))) },
   'key-press': { payload: string, notes: 'Keyboard only. Preserve the same key string for release; literal space is " ". Repeated press is deduplicated by a Set.' },
   'key-release': { payload: string, notes: 'One matched keyboard release increments local click count. Do not emit mouse buttons on this stream.' },
   'mouse-move': { payload: object({ x: number, y: number, memberId: optional(number) }), notes: 'Global physical screen pixels. Frontend subtracts Tauri innerPosition and divides by scaleFactor.' },
@@ -218,4 +223,225 @@ function staticValue(node, scope, seen = new Set()) {
   }
   if (node.type === 'BinaryExpression') {
     const left = staticValue(node.left, scope, new Set(seen));
-    const right = staticValue(node.r
+    const right = staticValue(node.right, scope, new Set(seen));
+    if (left === unknown || right === unknown) return unknown;
+    if (node.operator === '+') return left + right;
+    if (node.operator === '===') return left === right;
+    if (node.operator === '!==') return left !== right;
+  }
+  if (node.type === 'LogicalExpression' && node.operator === '||') {
+    const left = staticValue(node.left, scope, new Set(seen));
+    return left === unknown ? unknown : left || staticValue(node.right, scope, new Set(seen));
+  }
+  if (node.type === 'CallExpression') {
+    const args = node.arguments.map(argument => staticValue(argument, scope, new Set(seen)));
+    if (args.some(argument => argument === unknown)) return unknown;
+    if (node.callee.type === 'Identifier') {
+      if (node.callee.name === 'String' && !lookup('String', scope)) return String(args[0]);
+      const binding = lookup(node.callee.name, scope);
+      const fn = binding?.type === 'function' ? binding.node : null;
+      if (fn?.body.body.length === 1 && fn.body.body[0].type === 'ReturnStatement' && fn.params.every(param => param.type === 'Identifier') && !seen.has(binding)) {
+        const local = { parent: binding.scope, bindings: new Map(fn.params.map((param, index) => [param.name, { type: 'constant', value: args[index] }])) };
+        seen.add(binding);
+        return staticValue(fn.body.body[0].argument, local, seen);
+      }
+    }
+    if (node.callee.type === 'MemberExpression' && !node.callee.computed) {
+      const value = staticValue(node.callee.object, scope, new Set(seen));
+      if (typeof value === 'string') {
+        if (node.callee.property.name === 'trim' && args.length === 0) return value.trim();
+        if (node.callee.property.name === 'toLowerCase' && args.length === 0) return value.toLowerCase();
+        if (node.callee.property.name === 'replace' && args.length === 2 && (typeof args[0] === 'string' || args[0] instanceof RegExp) && typeof args[1] === 'string') return value.replace(args[0], args[1]);
+      }
+    }
+  }
+  return unknown;
+}
+
+function readApplicationMetadata(modules) {
+  const candidates = [...modules.values()].filter(module => module.root.bindings.has('APP_REGION') && module.root.bindings.has('router'));
+  if (candidates.length !== 1) throw new Error('Expected one application module containing APP_REGION and router');
+  const entry = candidates[0];
+  const valueOf = name => staticValue({ type: 'Identifier', name }, entry.root);
+  const appRegion = valueOf('APP_REGION');
+  const clickCacheEnvironment = valueOf('CLICK_CACHE_ENVIRONMENT');
+  if (typeof appRegion !== 'string' || typeof clickCacheEnvironment !== 'string') throw new Error('Cannot statically resolve application region or click-cache environment');
+  const router = entry.root.bindings.get('router').node;
+  const config = router?.type === 'CallExpression' ? router.arguments[0] : null;
+  const routeList = config?.properties?.find(property => property.key?.name === 'routes')?.value;
+  if (routeList?.type !== 'ArrayExpression') throw new Error('Expected router routes array');
+  const routes = routeList.elements.map(route => {
+    const properties = Object.fromEntries(route.properties.map(property => [property.key.name ?? property.key.value, property.value]));
+    const imports = [];
+    function collectImports(node) {
+      if (node.type === 'ImportExpression' && node.source.type === 'Literal') imports.push(path.basename(node.source.value));
+      for (const child of children(node)) collectImports(child);
+    }
+    collectImports(properties.component);
+    return { name: staticValue(properties.name, entry.root), path: staticValue(properties.path, entry.root), imports };
+  });
+  const settings = entry.root.bindings.get('DEFAULT_DESKTOP_CAT_SETTINGS')?.node;
+  const defaultPosition = settings?.properties?.find(property => property.key?.name === 'position')?.value;
+  return {
+    entry, appRegion, clickCacheEnvironment, routes,
+    displayName: typeof valueOf('APP_DISPLAY_NAME') === 'string' ? valueOf('APP_DISPLAY_NAME') : null,
+    defaultPosition: defaultPosition ? staticValue(defaultPosition, entry.root) : null,
+    installerFiles: new Set(routes.filter(route => route.name === 'installer' || route.name === 'uninstaller').flatMap(route => route.imports)),
+  };
+}
+
+function expressionSchema(node, module, depth = 0) {
+  if (!node) return { type: 'undefined' };
+  const value = staticValue(node, module.nodeScopes.get(node));
+  if (value !== unknown) return value === undefined ? { type: 'undefined' } : {
+    type: value === null ? 'null' : typeof value, value,
+  };
+  if (node.type === 'ObjectExpression') return {
+    type: 'object', properties: Object.fromEntries(node.properties.filter(item => item.type === 'Property').map(item => [
+      item.key.name ?? item.key.value, expressionSchema(item.value, module, depth + 1),
+    ])),
+    ...(node.properties.some(item => item.type === 'SpreadElement') ? { additionalProperties: true } : {}),
+  };
+  if (node.type === 'ArrayExpression') return {
+    type: 'array', items: node.elements.map(item => expressionSchema(item, module, depth + 1)),
+  };
+  return { type: 'expression', source: module.source.slice(node.start, node.end) };
+}
+
+function anchor(node, module) {
+  const before = module.source.slice(0, node.start);
+  let owner = node;
+  while (owner && !/^(FunctionDeclaration|FunctionExpression|ArrowFunctionExpression)$/.test(owner.type)) owner = module.parents.get(owner);
+  return {
+    file: module.file,
+    charRange: [node.start, node.end],
+    byteRange: [Buffer.byteLength(before), Buffer.byteLength(module.source.slice(0, node.end))],
+    line: before.split('\n').length,
+    function: owner?.id?.name ?? null,
+    source: module.source.slice(node.start, node.end),
+    context: module.source.slice(Math.max(0, node.start - 120), Math.min(module.source.length, node.end + 230)),
+  };
+}
+
+function payloadReads(callback, module) {
+  if (!callback || !/^(FunctionExpression|ArrowFunctionExpression)$/.test(callback.type) || callback.params[0]?.type !== 'Identifier') return [];
+  const parameterName = callback.params[0].name;
+  const parameterBinding = lookup(parameterName, module.nodeScopes.get(callback.params[0]));
+  const reads = new Set();
+  function visit(node) {
+    if (node.type === 'MemberExpression') {
+      const parts = [];
+      let current = node;
+      while (current.type === 'MemberExpression' || current.type === 'ChainExpression') {
+        if (current.type === 'ChainExpression') current = current.expression;
+        else {
+          parts.unshift(current.computed ? current.property.value : current.property.name);
+          current = current.object;
+        }
+      }
+      if (current.type === 'Identifier' && current.name === parameterName && parts[0] === 'payload' && lookup(current.name, module.nodeScopes.get(current)) === parameterBinding) reads.add(parts.slice(1).join('.'));
+    }
+    for (const child of children(node)) visit(child);
+  }
+  visit(callback.body);
+  return [...reads].sort();
+}
+
+export function inventoryAssets(assetDirectory, { version = '1.0.0' } = {}) {
+  const modules = new Map();
+  for (const file of fs.readdirSync(assetDirectory).filter(file => file.endsWith('.js')).sort()) {
+    const source = fs.readFileSync(path.join(assetDirectory, file), 'utf8');
+    const ast = parse(source, { ecmaVersion: 'latest', sourceType: 'module' });
+    const scopes = buildScopes(ast);
+    const module = { file, source, ast, ...scopes, exports: new Map() };
+    for (const item of ast.body) if (item.type === 'ExportNamedDeclaration') {
+      for (const specifier of item.specifiers) module.exports.set(specifier.exported.name, lookup(specifier.local.name, scopes.root));
+    }
+    modules.set(file, module);
+  }
+  for (const module of modules.values()) module.root.modules = modules;
+  const metadata = readApplicationMetadata(modules);
+  const { installerFiles } = metadata;
+  const commandContracts = commandContractsFor(metadata.clickCacheEnvironment);
+  const commandMap = new Map(), eventMap = new Map(), dynamic = [], aliases = [];
+  for (const module of modules.values()) {
+    for (const [name, binding] of module.root.bindings) {
+      const role = resolveBindingRole(binding, modules);
+      if (role) aliases.push({ file: module.file, name, role });
+    }
+    function visit(node) {
+      if (node.type === 'CallExpression') {
+        const scope = module.nodeScopes.get(node);
+        const role = node.callee.type === 'Identifier' ? resolveBindingRole(lookup(node.callee.name, scope), modules) : null;
+        if (role) {
+          const nameIndex = role === 'emitTo' ? 1 : 0;
+          const name = staticValue(node.arguments[nameIndex], scope);
+          const site = { ...anchor(node, module), callee: node.callee.name, role };
+          const command = role === 'invoke';
+          if (typeof name === 'string') {
+            const targetMap = command ? commandMap : eventMap;
+            if (!targetMap.has(name)) targetMap.set(name, command ? {
+              name, kind: name.startsWith('plugin:') ? 'plugin' : 'application', scopes: [], callSites: [],
+            } : { name, operations: [], callSites: [] });
+            const entry = targetMap.get(name);
+            site.arguments = expressionSchema(node.arguments[nameIndex + 1], module);
+            if (command) {
+              const itemScope = installerFiles.has(module.file) ? 'windows-installer' : 'application-runtime';
+              if (!entry.scopes.includes(itemScope)) entry.scopes.push(itemScope);
+            } else {
+              if (!entry.operations.includes(role)) entry.operations.push(role);
+              if (role === 'listen' || role === 'once') site.payloadReads = payloadReads(node.arguments[nameIndex + 1], module);
+            }
+            entry.callSites.push(site);
+          } else dynamic.push(site);
+        }
+      }
+      for (const child of children(node)) visit(child);
+    }
+    visit(module.ast);
+  }
+  for (const entry of commandMap.values()) {
+    if (entry.kind === 'application') Object.assign(entry, { response: { type: 'null', consumption: 'await-only' } }, commandContracts[entry.name] || {});
+    else entry.implementation = 'Tauri core or official plugin';
+  }
+  for (const entry of eventMap.values()) Object.assign(entry, nativeEventContracts[entry.name] || {
+    payload: { type: 'opaque', evidence: 'Forwarded between frontend windows; callSites retain producer expression and consumer field reads.' },
+  });
+  const authCallbackScheme = commandMap.has('plugin:deep-link|get_current') && eventMap.has('deep-link://new-url')
+    ? staticValue({ type: 'CallExpression', callee: { type: 'Identifier', name: 'getOverseasAuthScheme' }, arguments: [] }, metadata.entry.root)
+    : null;
+  const mainModule = metadata.routes.find(route => route.path === '/')?.imports[0];
+  return {
+    schemaVersion: 1,
+    sourceApplication: { name: metadata.displayName, region: metadata.appRegion, entryModule: metadata.entry.file, version, frontend: 'Vue / Tauri 2.10.3' },
+    runtimeConstants: {
+      clickCacheEnvironment: metadata.clickCacheEnvironment,
+      maxSafeClickCount: Number.MAX_SAFE_INTEGER,
+      ...(typeof authCallbackScheme === 'string' ? { authCallbackScheme } : {}),
+      defaultPosition: metadata.defaultPosition,
+      hotkeys: { switchDisplay: ['F8', 'f8'], toggleVisibility: ['F9', 'f9'], secondaryAction: ['F4', 'f4'], devtools: ['F5', 'f5'] },
+    },
+    bootContract: {
+      entry: `index.html -> ${metadata.entry.file} router / -> ${mainModule} onMounted`,
+      routes: Object.fromEntries(metadata.routes.map(route => [route.name.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase()), route.path])),
+      requiredResponses: ['is_internal_testing_build', 'is_devtools_hotkeys_build', 'get_main_desktop_safe_area', 'get_main_taskbar_insets', 'load_key_press_count', 'load_cumulative_click_count'],
+      requiredWindowMutations: ['set_main_force_cursor_ignore', 'set_main_window_fullscreen_shell', 'apply_main_window_position', 'set_main_window_content_bounds', 'set_main_hit_region'],
+      inputRegistration: ['mouse-move', 'mouse-button', 'global-clap-mouse', 'key-press', 'key-release', ...(eventMap.has('gamepad-button-press') ? ['gamepad-button-press'] : [])],
+      auth: 'Frontend preserves official HTTP/Socket.IO account, inventory, rewards, and room protocols. Native backend owns window/event transport, not account emulation.',
+    },
+    nativeAliases: aliases,
+    commands: [...commandMap.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    events: [...eventMap.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    dynamicCalls: dynamic.map(site => ({ ...site, category: site.role === 'invoke' ? 'framework-plugin-factory' : 'generic-event-forwarder' })),
+  };
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  const profile = getRegionProfile();
+  const directory = process.argv[2] || new URL(`../${profile.frontendDir}/assets/`, import.meta.url).pathname;
+  const destination = process.argv[3] || new URL(profile.id === 'cn' ? '../tests/contracts.json' : '../tests/contracts-global.json', import.meta.url).pathname;
+  const { version } = JSON.parse(fs.readFileSync(new URL(`../${profile.upstreamLock}`, import.meta.url), 'utf8'));
+  const inventory = inventoryAssets(directory, { version });
+  fs.writeFileSync(destination, JSON.stringify(inventory, null, 2) + '\n');
+  console.log(`${inventory.commands.length} commands, ${inventory.events.length} named events, ${inventory.dynamicCalls.length} dynamic call sites -> ${destination}`);
+}

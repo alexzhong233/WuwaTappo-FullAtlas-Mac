@@ -57,8 +57,8 @@ $files = Get-ChildItem -LiteralPath $Source -Recurse -File -ErrorAction Silently
   $skip = $false
   foreach ($d in $excludeDirs) { if ($rel -eq $d -or $rel.StartsWith("$d\")) { $skip = $true } }
   if ($rel -like 'profile\*') { $skip = $true }
-  # 运行期状态不打包，避免把账号与缓存带给别人
-  if ($rel -in @('offline_state.json', 'assistant_state.json', 'update_hint.json', 'update_state.json', 'local_config.json')) { $skip = $true }
+  # 只排除真正的运行期状态；local_config.json 是部署必需（含本机 HTTP 的 token），必须带上
+  if ($rel -in @('offline_state.json', 'assistant_state.json', 'update_hint.json', 'update_state.json')) { $skip = $true }
   # 自提权脚本：部分机器的安全策略禁止读取/分发，且产物用 WuwaTappoLauncher.exe 即进入口
   if ($rel -eq 'launch.ps1') { $skip = $true }
   -not $skip

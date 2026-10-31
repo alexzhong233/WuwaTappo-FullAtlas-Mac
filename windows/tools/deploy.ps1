@@ -70,6 +70,8 @@ if (Test-Path -LiteralPath (Join-Path $Root 'docs')) {
   Copy-Item -LiteralPath (Join-Path $Root 'docs') -Destination (Join-Path $Payload 'docs') -Recurse
 }
 Copy-Item -LiteralPath (Join-Path $Root 'build\local_config.json') -Destination (Join-Path $Payload 'package_config.json')
+# 运行期必需（含 token）；robocopy 会跳过它，保留目标目录里已有的 token 与计数
+Copy-Item -LiteralPath (Join-Path $Root 'build\local_config.json') -Destination (Join-Path $Payload 'local_config.json')
 
 # 无控制台启动器（若已编译）——必须在 robocopy 之前放进 payload，否则同步不到 app\
 $launcherExe = Join-Path $Root 'build\launcher\dist\WuwaTappoLauncher.exe'
@@ -79,8 +81,15 @@ if (Test-Path -LiteralPath $launcherExe) {
 
 # 同步到 app\（不清理多余文件，保留账号与运行状态）
 if (-not (Test-Path -LiteralPath $App)) { New-Item -ItemType Directory -Path $App | Out-Null }
-robocopy $Payload $App /E /NFL /NDL /NJH /NJS /R:1 /W:1 | Out-Null
+# 运行期状态一律不覆盖：token 变了会让已部署实例的前端鉴权失败
+robocopy $Payload $App /E /NFL /NDL /NJH /NJS /R:1 /W:1 /XF local_config.json offline_state.json assistant_state.json | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "同步到 app\ 失败，robocopy 退出码 $LASTEXITCODE" }
+
+# 全新目录没有运行期配置，这里补一份
+if (-not (Test-Path -LiteralPath (Join-Path $App 'local_config.json'))) {
+  Copy-Item -LiteralPath (Join-Path $Payload 'local_config.json') -Destination (Join-Path $App 'local_config.json')
+  '已写入运行期配置 local_config.json（含新 token）'
+}
 
 # 启动器（相对路径，可随目录搬迁）；start.cmd 用纯 ASCII 名，供桌面快捷方式引用
 $launcher = @'

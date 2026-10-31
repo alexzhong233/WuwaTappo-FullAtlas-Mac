@@ -77,14 +77,29 @@ if (Test-Path -LiteralPath $buildPy) {
   if ($hit) { $modVersion = $hit.Matches[0].Groups[1].Value }
 }
 
+# 前端用 token 给本机 HTTP 请求签名，必须存在。已生成的沿用，避免每次构建换掉已部署实例的凭据
+$configPath = Join-Path $Root 'build\local_config.json'
+$token = ''
+if (Test-Path -LiteralPath $configPath) {
+  $previous = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
+  if ($previous.token) { $token = [string]$previous.token }
+}
+if (-not $token) {
+  $random = New-Object byte[] 32
+  $generator = [Security.Cryptography.RandomNumberGenerator]::Create()
+  try { $generator.GetBytes($random) } finally { $generator.Dispose() }
+  $token = [Convert]::ToBase64String($random)
+}
+
 $config = [ordered]@{
+  token          = $token
   port           = 43229
   asset_count    = $assetCount
   atlas_count    = $atlasCount
   client_version = $clientVersion
   mod_version    = $modVersion
 }
-[IO.File]::WriteAllText((Join-Path $Root 'build\local_config.json'),
+[IO.File]::WriteAllText($configPath,
   ($config | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))
 "基底版本 $clientVersion / 整合 $modVersion / 素材 $assetCount 张 / 图鉴 $atlasCount 条"
 

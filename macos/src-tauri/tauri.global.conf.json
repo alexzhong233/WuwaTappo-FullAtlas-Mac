@@ -1,6 +1,6 @@
 {
   "productName": "WuwaTappo Global Community",
-  "version": "1.2.2-alpha.1",
+  "version": "1.2.3",
   "identifier": "dev.w33d.wuwatappo.global.mac",
   "build": {
     "frontendDist": "../build/frontend-global"

@@ -165,6 +165,6 @@ windows\
 | --- | --- | --- |
 | `local_atlas_controller.js` | 直接 `rawFetch` 到本机 HTTP | 有 `d.request` 钩子时走原生 IPC；`assetsHost` 用 `offlineData.assets_host` |
 | `assistant_dashboard.js` | 「官方基底监控」卡片，查 Kuro 版本 | 「Mac 版本更新」卡片，查 `/official/update-check` |
-| `desktop_assistant.js` | `VERSION = '1.2'` | `VERSION = '1.2.2-alpha.1'` |
+| `desktop_assistant.js` | `VERSION = '1.2'` | `VERSION = '1.2.3'` |
 
 收敛方案：以 macOS 版已有的 `d.request` 作为传输层抽象，Windows 侧实现一个走本机 HTTP 的版本，两边共用一个文件。这一步还没做。

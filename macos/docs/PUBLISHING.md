@@ -51,10 +51,25 @@ Release 工作流构建 ZIP / DMG 后创建 **Draft / Pre-release**，不会直�
 
 新版本需要同步 `package.json`、`package-lock.json`、Cargo、Tauri 配置与助手显示版本，并重新完成测试和实机验收。官方版本锁记录的是官方 Windows 资源版本，与整合版发布版本独立。对未知官方版本不要绕过版本 / SHA-256 门禁。
 
-## 发布官方 1.0.3 实验分支
+## 发布整合版
 
-该分支整合版版本号为 **1.2.2-alpha.1**，适配内容和待验收项见 [实验记录](OFFICIAL_1.0.3.md)。当前适配已合入 `main`，`dev` 也从该基底持续构建。
+当前整合版版本号为 **1.2.3**，适配内容和待验收项见 [实验记录](OFFICIAL_1.0.3.md)。`dev` 从 `main` 派生并持续构建。
 
-本地安装包为 macOS 的 `WuwaTappo-Full-CN-Community-1.2.2-alpha.1-macOS-arm64.dmg`（国际服换成 `Full-Global-Community`）与 Windows 的 `…-Windows-x64-1.2.2-alpha.1.exe`。可以在 GitHub Releases 中手动创建 `v1.2.2-alpha.1`，目标选 `official-1.0.3`，勾选 **Pre-release** 并先保存草稿，再上传这些附件。不要把它标记为稳定最新版。
+**发版只能靠推标签触发，不要在网页上手动创建 Release。** GitHub 对「创建 Release 时顺带新建的 tag」不发 `push` 事件，工作流根本不会启动，结果就是一个没有任何产物的空 Release。正确顺序：
+
+```bash
+# 1. 版本号必须和 package.json 一致；package-lock / Cargo / 两份 tauri.conf 一起改
+# 2. 提交并推送
+git add -A && git commit -m "release: 1.2.3" && git push
+# 3. 推标签，触发 Release 工作流（两个平台都构建成功才会建草稿发布）
+git tag v1.2.3 && git push origin v1.2.3
+```
+
+工作流产出的 Release 一定是**草稿 + 预发布**，并带齐四件产物：
+`WuwaTappo-Full-CN-Community-<ver>-macOS-arm64.dmg`、`WuwaTappo-Full-Global-Community-<ver>-macOS-arm64.dmg`、
+`WuwaTappo-Full-CN-Community-Windows-x64-<ver>.exe`、`WuwaTappo-Full-Global-Community-Windows-x64-<ver>.exe`。
+验收后再手动点 Publish。标签名与 `package.json` 版本不一致时，`publish` 步骤会直接失败，不会产出半成品。
+
+标签已经存在但工作流没跑（例如上面那种网页建 Release 的情况），可以用 `Actions → Release → Run workflow` 手动指定标签补跑。
 
 `dev` 分支每次 CI 成功后会自动更新 [dev 预发布](https://github.com/alexzhong233/WuwaTappo-Full-Community/releases/tag/dev)。正式发布时从 `main` 或经过验收的提交创建 `v*` 标签；Release 工作流会**先构建两个平台**，四个产物（两服 × macOS dmg / Windows exe）齐全才创建草稿预发布——缺任何一个平台就不发版，维护者确认后点击 Publish.

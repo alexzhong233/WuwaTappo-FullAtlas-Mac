@@ -1,0 +1,71 @@
+name: Dev Release
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: dev-release
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      TAG: dev
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Download CI packages
+        run: |
+          set -euo pipefail
+          rm -rf dist
+          mkdir -p dist
+          gh run download "$RUN_ID" --repo "$GH_REPO" --name WuwaTappo-FullAtlas-Mac-arm64 --dir dist
+          PACKAGES=(dist/*.zip dist/*.dmg)
+          [[ ${#PACKAGES[@]} -eq 2 && -f "${PACKAGES[0]}" && -f "${PACKAGES[1]}" ]]
+      - name: Create or update rolling dev release
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          OFFICIAL=$(node -p "require('./upstream-cn.json').version")
+          SHORT_SHA="${HEAD_SHA:0:12}"
+          cat > /tmp/dev-release-notes.md <<EOF
+          # WuwaTappo FullAtlas Mac Dev
+
+          自动构建版本：${VERSION}
+          官方国服资源：${OFFICIAL}
+          源码提交：${HEAD_SHA}
+
+          这是随 main 分支持续更新的开发预发布版本，仅用于测试。
+          EOF
+          if gh release view "$TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.zip dist/*.dmg --repo "$GH_REPO" --clobber
+            gh release edit "$TAG" --repo "$GH_REPO" \
+              --title "WuwaTappo FullAtlas Mac Dev (${SHORT_SHA})" \
+              --notes-file /tmp/dev-release-notes.md \
+              --prerelease --latest=false
+          else
+            gh release create "$TAG" dist/*.zip dist/*.dmg --repo "$GH_REPO" \
+              --target "$HEAD_SHA" \
+              --title "WuwaTappo FullAtlas Mac Dev (${SHORT_SHA})" \
+              --notes-file /tmp/dev-release-notes.md \
+              --prerelease --latest=false
+          fi

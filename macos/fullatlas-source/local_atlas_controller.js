@@ -5,6 +5,10 @@ function createLocalAtlasController(d) {
   const enabled = d.ref(false), busy = d.ref(false), selection = d.ref({}), favorites = d.ref({});
   const offlineData = d.ref(null), revision = d.ref(0);
   const syncStatus = d.ref({status: 'idle', done: 0, total: 0});
+  // 发行包不带素材缓存（近百 MB），所以「装完第一次启动」必然是 ready=false。
+  // 这是正常状态，不是错误：先按联机模式把界面拉起来，后台补齐素材再放开开关。
+  const cacheReady = d.ref(false);
+  let cacheBootstrapStarted = false;
   let originalCatalog = null, pending = Promise.resolve();
   let statusTimer=null, disposed=false;
   let offlinePolicyInstalled = false;
@@ -149,8 +153,16 @@ function createLocalAtlasController(d) {
     }
     revision.value++;
   }
+  function cacheProgressMessage() {
+    const s = syncStatus.value || {};
+    if (s.status === 'failed') return '本地素材下载失败：' + (s.error || '请检查网络后点「检查并同步」重试');
+    if (s.status === 'running') return '本地素材正在下载 ' + (s.done || 0) + '/' + (s.total || '…') + '，完成后开关自动可用';
+    return '本地素材还没准备好，点「检查并同步」开始下载';
+  }
   async function setEnabled(on) {
     if (busy.value) return;
+    // 素材没就绪时开关必须给出可执行的理由，而不是抛一句「未就绪」。
+    if (on && !cacheReady.value) throw new Error(cacheProgressMessage());
     busy.value = true;
     try {
       await d.window.__WUWA_LOCAL_ATLAS__?.assistant?.flushBeforeSwitch(Boolean(on));
@@ -226,6 +238,8 @@ function createLocalAtlasController(d) {
       syncStatus.value = await localRequest('/sync/status');
     }
     if (syncStatus.value.status === 'failed') throw new Error(syncStatus.value.error || '图鉴同步失败，原缓存保留');
+    const status = await localRequest('/status');
+    cacheReady.value = status.ready === true;
     if(enabled.value){const data=await prepare(true);d.applyOfflineCatalog(data.catalog,origin);revision.value++;}
     if(syncStatus.value.result?.changed){
       const generation=String(syncStatus.value.result.assets_json_ts||syncStatus.value.checked_at);
@@ -265,10 +279,25 @@ function createLocalAtlasController(d) {
     }
     throw last;
   }
+  function kickCacheBootstrap() {
+    // 宿主启动时已经会自动补；这里再补一刀兜底，正在跑的话宿主会直接返回当前进度。
+    if (cacheBootstrapStarted) return;
+    cacheBootstrapStarted = true;
+    localRequest('/sync', {force: false}).then(status => { syncStatus.value = status; }).catch(() => {});
+  }
   const ready = waitForHost().then(async status => {
-    if (!status.ready) throw new Error('离线资源未就绪，请使用本地版启动器');
-    await applyMode(status.enabled === true && status.mode_verified === true && status.network_policy==='rooms-only');
     syncStatus.value = status.sync || syncStatus.value;
+    cacheReady.value = status.ready === true;
+    const on = status.enabled === true && status.mode_verified === true && status.network_policy==='rooms-only';
+    if (!cacheReady.value) {
+      // 全新安装：发行包不带素材缓存（近百 MB），宿主此刻正在后台下载。
+      // 这里绝对不能 throw —— ready 是主渲染进程的启动闸门，抛错会把整个界面
+      // 替换成一行「请通过本地版启动器运行」，装完就完全没法用。
+      if (enabled.value) { enabled.value = false; save(); }
+      kickCacheBootstrap();
+      return;
+    }
+    await applyMode(on);
     save();
     if (d.catalogConsumer!==false&&d.window.setTimeout) d.window.setTimeout(() => syncCache(false).catch(() => {}), 2000);
   });
@@ -280,14 +309,17 @@ function createLocalAtlasController(d) {
       try {
         const status = await localRequest('/status');
         if (status.sync) syncStatus.value = status.sync;
-        const on = status.enabled === true && status.mode_verified === true && status.network_policy==='rooms-only';
+        const wasReady = cacheReady.value;
+        cacheReady.value = status.ready === true;
+        const on = cacheReady.value && status.enabled === true && status.mode_verified === true && status.network_policy==='rooms-only';
         if (on !== enabled.value) { await applyMode(on); save(); }
+        else if (!wasReady && cacheReady.value) revision.value++;
       } catch {}
       finally { checkingStatus = false; }
     }, d.catalogConsumer===false?15000:1500);
   }
   function dispose(){disposed=true;if(statusTimer!==null)d.window.clearInterval?.(statusTimer);}
-  return {enabled, busy, selection, favorites, revision, ready, setEnabled, inventory, viewUser, select,
-    favorite, reorder, prepare, offlineData, get assetsHost(){return offlineData.value?.assets_host||origin;}, offlineError, checkInvoke, syncStatus, syncCache, request: localRequest, dispose,
+  return {enabled, busy, selection, favorites, revision, ready, cacheReady, setEnabled, inventory, viewUser, select,
+    favorite, reorder, prepare, offlineData, assetsHost: origin, offlineError, checkInvoke, syncStatus, syncCache, request: localRequest, dispose,
     restricted,normalCumulative:()=>d.getAccountCumulative?.()??0,normalPending:()=>d.getAccountPending?.()??0};
 }

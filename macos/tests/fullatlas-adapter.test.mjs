@@ -4,6 +4,12 @@ import vm from 'node:vm';
 import { parse } from 'acorn';
 import { test } from 'node:test';
 import { verifiedAdapterVersion } from '../scripts/fullatlas-frontend.mjs';
+import { getRegionProfile } from '../scripts/regions.mjs';
+
+const profile = getRegionProfile();
+// FullAtlas 数据整合只在国服构建里启用（integrateFullAtlas 对国际服直接返回），
+// 国际服没有对应的整合产物，下面三个依赖产物的用例无从比对。
+const integratedOnly = profile.id === 'cn' ? {} : { skip: `FullAtlas 集成不参与${profile.label}构建` };
 
 test('FullAtlas accepts only the reviewed official version and exact installer digest', async () => {
   const lock = JSON.parse(await readFile(new URL('../upstream-cn.json', import.meta.url), 'utf8'));
@@ -13,7 +19,7 @@ test('FullAtlas accepts only the reviewed official version and exact installer d
   assert.throws(() => verifiedAdapterVersion({ ...lock, region: 'GLOBAL' }), /no verified Mac adapter/);
 });
 
-test('prepared FullAtlas factory stays inactive in login and other auxiliary routes', async () => {
+test('prepared FullAtlas factory stays inactive in login and other auxiliary routes', integratedOnly, async () => {
   const { readdir } = await import('node:fs/promises');
   const directory = new URL('../build/frontend/assets/', import.meta.url);
   const sources = await Promise.all((await readdir(directory)).filter(name => name.endsWith('.js')).map(name => readFile(new URL(name, directory), 'utf8')));
@@ -33,7 +39,7 @@ test('prepared FullAtlas factory stays inactive in login and other auxiliary rou
   }
 });
 
-test('every prepared module imports exports that its actual dependency provides', async () => {
+test('every prepared module imports exports that its actual dependency provides', integratedOnly, async () => {
   const { readdir } = await import('node:fs/promises');
   const directory = new URL('../build/frontend/assets/', import.meta.url);
   const modules = new Map();
@@ -59,7 +65,7 @@ test('every prepared module imports exports that its actual dependency provides'
   }
 });
 
-test('assistant chest timers bind to the official readiness computations after minifier renaming', async () => {
+test('assistant chest timers bind to the official readiness computations after minifier renaming', integratedOnly, async () => {
   const structure = JSON.parse(await readFile(new URL('../build/fullatlas-adapter/base/js_structure.json', import.meta.url), 'utf8'));
   const main = Object.entries(structure.files).find(([, meta]) => meta.snapshots.length === 1);
   assert.ok(main);

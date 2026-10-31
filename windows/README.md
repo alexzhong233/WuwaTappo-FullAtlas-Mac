@@ -14,7 +14,7 @@
 ## 产物形态
 
 - 绿色版，不写注册表、不装服务，整个 `app\` 目录拷走就能用。
-- 入口 `WuwaTappoLauncher.exe`：无控制台窗口，自动提权（主程序清单是 `requireAdministrator`）。
+- 入口 `WuwaTappoLauncher.exe`：**GUI 子系统，没有控制台窗口**。启动器自身不提权，拉主程序时用 `ShellExecuteW("runas")`，由系统按主程序的清单（`requireAdministrator`）提权——所以双击只弹一次 UAC，而不是「启动器一次 + 主程序一次」。
 - 官方自动更新**永久关闭**（`isAppUpdaterEnabled()` 返回 false）：改过的 exe 过不了官方 minisign 签名，走 OTA 会把补丁覆盖掉。
 
 ## 国服 / 国际服
@@ -155,8 +155,10 @@ windows\
 1. **本机安全策略禁止 COM**（`WScript.Shell`、`Shell.Application` 一律拦截）。快捷方式改用 `pylnk3` 直接写 `.lnk` 二进制（`tools\make_shortcut.py`）。手写字节不行——Windows 要求 `LinkTargetIDList`，只有 `LinkInfo` 的链接会被 shell 拒绝。
 2. **`launch.ps1` 会被安全策略自动删除**（自提权脚本 `Start-Process -Verb RunAs`）。内容存档在 `src\installer\launch.ps1.disabled.txt`，入口统一用 `WuwaTappoLauncher.exe`。
 3. **`schtasks.exe` 被黑名单拦截**，注册定时检查要用 PowerShell 原生 `Register-ScheduledTask`（`tools\install-schedule.ps1` 已处理）。
-4. **CI 已接入**（`.github/workflows/build-windows.yml`，`windows-2022` runner）。CI 产物不含素材缓存与内嵌 WebView2，体积约 83 MB；`/status` 的 `ready` 会是 `false`，图鉴按需回源官方 CDN。没有内嵌运行时，所以产物依赖系统 WebView2；CI 里有一条断言盯着入口 stub 的回退分支（`build_report_v2.json` 的 `runtime_fallback`），防止「stub 又把浏览器路径钉死到空目录」这类回归。要完整离线图鉴就在本地跑一次 `prepare_cache.py` 再构建（完整产物约 1.1 GB）。
-5. **安装包用 NSIS**（`tools\package-installer.ps1`）：按用户装到 `%LOCALAPPDATA%\Programs\`，不需要管理员权限，装完桌面与开始菜单各有快捷方式（指向 `WuwaTappoLauncher.exe`），控制面板可卸载。绿色 zip 仍保留（`tools\package-win.ps1`），供调试与免安装场景。
+4. **CI 已接入**（`.github/workflows/build-windows.yml`，`windows-2022` runner）。发行包统一不带素材缓存与内嵌 WebView2，体积约 80 MB；`/status` 的 `ready` 会是 `false`，图鉴按需回源官方 CDN（`tools\payload.ps1` 里排除了 `cache\`，本机跑过 `prepare_cache.py` 也不会让安装包翻倍）。没有内嵌运行时，所以产物依赖系统 WebView2；CI 里有一条断言盯着入口 stub 的回退分支（`build_report_v2.json` 的 `runtime_fallback`），防止「stub 又把浏览器路径钉死到空目录」这类回归。
+5. **安装包用 NSIS + MUI2**（`tools\package-installer.ps1`）：按用户装到 `%LOCALAPPDATA%\Programs\`，安装器本身不需要管理员权限。界面是欢迎页 → 选目录 → 进度 → 完成页（可直接勾选启动），语言跟系统走（简中 / 英文）。桌面与开始菜单快捷方式指向 `WuwaTappoLauncher.exe`，图标用 `app.ico`（`deploy.ps1` 从官方客户端 exe 里提取的 `icon_32512.ico`），卸载项同样带图标。覆盖安装会先安静结束正在运行的进程，卸载时可选择保留素材缓存与登录状态。
+   **入口必须是 GUI 启动器**：缺了 `WuwaTappoLauncher.exe` 时打包脚本直接报错，不再回退 `start.cmd`——那个回退会让安装包弹控制台黑框、快捷方式图标变成 cmd 的。
+   绿色 zip 仍保留（`tools\package-win.ps1`），供调试与免安装场景。
 6. **官方发新版不会自动适配**。`upstream-win.json` 锁住版本，构建不会静默换基底；跟版要手工重新定位锚点并实机验证。
 
 ## 与 macOS 侧的关系

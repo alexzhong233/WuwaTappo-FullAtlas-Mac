@@ -7,10 +7,18 @@
      发现有比本地基底更高的版本，弹一次提示，同一版本只提示一次
   4. 自身退出
 
+关于提权：主程序 WuwaTappo.Local.exe 的清单里是 requireAdministrator（沿用官方
+客户端），所以它必须由系统提权启动。启动器自己不提权（不带 --uac-admin），
+改用 ShellExecuteW("runas") 拉起主程序，让 Windows 按主程序的清单弹一次 UAC。
+这样做的原因：
+  - 启动器自身 --uac-admin 会让每次双击先弹一次针对启动器的 UAC，再弹一次主程序的；
+  - 不提权的进程用 CreateProcess 直接起 requireAdministrator 程序会失败 [WinError 740]。
+ShellExecuteW 走的是 shell 的提权通道，非提权进程也能拉起它。
+
 注意：改过的程序过不了官方 minisign 校验，所以程序内自动更新必须保持关闭。
       这里只做「告诉你官方出新版了」，绝不自动下载或替换，避免静默错位。
 
-编译：tools\\build-launcher.ps1（PyInstaller --onefile --noconsole --uac-admin）
+编译：tools\\build-launcher.ps1（PyInstaller --onefile --noconsole）
 """
 import ctypes
 import json
@@ -204,6 +212,20 @@ def notify_update(root):
 
 # -------------------------------------------------------------------- 主流程
 
+def start_app(app, root):
+    """用 shell 的提权通道启动主程序。
+
+    主程序的清单是 requireAdministrator：从非提权进程直接 CreateProcess 会拿到
+    [WinError 740]。ShellExecuteW("runas") 交给系统按目标程序的清单处理，
+    用户拒绝时返回 <= 32（SE_ERR_ACCESSDENIED = 5）。
+    """
+    shell32 = ctypes.windll.shell32
+    shell32.ShellExecuteW.restype = ctypes.c_void_p
+    code = shell32.ShellExecuteW(None, 'runas', app, None, root, 1) or 0
+    if code <= 32:
+        raise OSError(code, '系统没有授予管理员权限。主程序需要管理员权限才能启动，'
+                            '请重试并在 Windows 的提示框里点「是」。')
+
 def main():
     root = app_dir()
     host = os.path.join(root, HOST_EXE)
@@ -232,7 +254,7 @@ def main():
             time.sleep(0.4)
 
     try:
-        subprocess.Popen([app], cwd=root, creationflags=DETACHED_PROCESS, close_fds=True)
+        start_app(app, root)
     except OSError as exc:
         fail_box('启动主程序失败：\n%s' % exc)
         return 1

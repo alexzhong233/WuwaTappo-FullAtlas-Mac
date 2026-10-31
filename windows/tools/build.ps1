@@ -1,5 +1,5 @@
 ﻿<#
-  全量重建：解包官方 EXE -> 注入全图鉴 -> 冻结本地服务 -> 装配到 app\
+  全量重建：解包官方 EXE -> 注入全图鉴 -> 冻结本地服务 -> 编译启动器 -> 装配到 app\
 
   前置：
     1. tools\setup-env.ps1 已执行（.venv 就绪）
@@ -29,7 +29,7 @@ if (-not (Test-Path -LiteralPath $Official)) { throw "缺少官方主程序：$O
 
 
 if ($Extract) {
-  "== 1/4 解包官方 EXE =="
+  "== 1/5 解包官方 EXE =="
   $env:WUWA_EXTRACT_ROOT = $Base
   & $Py (Join-Path $Patched 'tools\extract_static.py') $Official
   if ($LASTEXITCODE -ne 0) { throw "解包失败" }
@@ -50,7 +50,7 @@ if ($Extract) {
   if ($LASTEXITCODE -ne 0) { throw '生成 js_structure.json 失败' }
 }
 
-"== 2/4 注入全图鉴控制器（$($R.Label)） =="
+"== 2/5 注入全图鉴控制器（$($R.Label)） =="
 $env:WUWA_BUILD_ROOT = $R.WorkDir
 $env:WUWA_EXTRACT_ROOT = $Base
 
@@ -122,7 +122,7 @@ if (Test-Path -LiteralPath (Join-Path $R.WorkDir 'frontend_v2')) {
 & $Py (Join-Path $Patched 'tools\build_integration.py')
 if ($LASTEXITCODE -ne 0) { throw "注入失败" }
 
-"== 3/4 冻结本地素材服务 =="
+"== 3/5 冻结本地素材服务 =="
 & $Py -m PyInstaller --noconfirm --clean --onedir --console --name LocalGalleryHost `
   --distpath (Join-Path $R.WorkDir 'frozen') `
   --workpath (Join-Path $R.WorkDir 'pyinstaller') `
@@ -131,12 +131,16 @@ if ($LASTEXITCODE -ne 0) { throw "注入失败" }
   (Join-Path $Patched 'src\local_host.py')
 if ($LASTEXITCODE -ne 0) { throw "冻结失败" }
 
+"== 4/5 编译无控制台启动器 =="
+# 安装包的快捷方式指向它；缺失就只能退到 start.cmd（弹黑框 + cmd 图标）。
+& (Join-Path $PSScriptRoot 'build-launcher.ps1') -Region $R.Id
+
 if ($NoDeploy) {
-  "== 4/4 跳过装配（-NoDeploy）=="
+  "== 5/5 跳过装配（-NoDeploy）=="
   "构建产物: build\WuwaTappo.Local.v2.exe 与 build\frozen\LocalGalleryHost"
   exit 0
 }
 
-"== 4/4 装配并同步到 app\ =="
+"== 5/5 装配并同步到 app\ =="
 if ($NoRuntime) { & (Join-Path $PSScriptRoot 'deploy.ps1') -Region $R.Id -NoRuntime }
 else { & (Join-Path $PSScriptRoot 'deploy.ps1') -Region $R.Id }

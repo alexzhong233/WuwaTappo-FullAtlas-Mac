@@ -79,10 +79,19 @@ Copy-Item -LiteralPath (Join-Path $R.WorkDir 'local_config.json') -Destination (
 # 运行期必需（含 token）；robocopy 会跳过它，保留目标目录里已有的 token 与计数
 Copy-Item -LiteralPath (Join-Path $R.WorkDir 'local_config.json') -Destination (Join-Path $Payload 'local_config.json')
 
-# 无控制台启动器（若已编译）——必须在 robocopy 之前放进 payload，否则同步不到 app\
+# 无控制台启动器——安装包的快捷方式就指向它。必须在 robocopy 之前放进 payload，
+# 否则同步不到 app\。build.ps1 的 4/5 步负责编译，这里只在真缺的时候明确报错。
 $launcherExe = Join-Path $R.WorkDir 'launcher\dist\WuwaTappoLauncher.exe'
-if (Test-Path -LiteralPath $launcherExe) {
-  Copy-Item -LiteralPath $launcherExe -Destination (Join-Path $Payload 'WuwaTappoLauncher.exe')
+if (-not (Test-Path -LiteralPath $launcherExe)) {
+  throw "缺少无控制台启动器：$launcherExe（先跑 tools\build-launcher.ps1 -Region $($R.Id)）"
+}
+Copy-Item -LiteralPath $launcherExe -Destination (Join-Path $Payload 'WuwaTappoLauncher.exe') -Force
+
+# 快捷方式/卸载项图标：官方客户端 exe 里提取出来的那份，装成 app.ico 供 NSIS 引用
+$appIcon = Get-ChildItem -LiteralPath (Join-Path $R.WorkDir 'official') -Recurse -Filter 'icon_32512.ico' -ErrorAction SilentlyContinue |
+  Select-Object -First 1
+if ($appIcon) {
+  Copy-Item -LiteralPath $appIcon.FullName -Destination (Join-Path $Payload 'app.ico') -Force
 }
 
 # 同步到 app\（不清理多余文件，保留账号与运行状态）

@@ -7,6 +7,9 @@
   按用户安装到 %LOCALAPPDATA%\Programs\<产品名>，不需要管理员权限；
   装完桌面与开始菜单各有快捷方式，双击即用，控制面板里可卸载。
 
+  界面用 MUI2：欢迎页 → 选目录 → 安装进度 → 完成页（可直接勾选启动）。
+  快捷方式的图标取自 app\app.ico（deploy.ps1 从官方客户端 exe 里提取）。
+
   版本号取自仓库根的 package.json（与 macOS 产物保持一致）。
 
   用法：
@@ -59,13 +62,17 @@ $exe = Join-Path $OutDir "$name.exe"
 if (-not (Test-Path -LiteralPath $Source)) { throw "找不到待打包目录：$Source（先跑 build.ps1 / deploy.ps1）" }
 if (-not (Test-Path -LiteralPath (Join-Path $Source 'WuwaTappo.Local.exe'))) { throw "目录里没有 WuwaTappo.Local.exe，可能是空部署：$Source" }
 
+# 入口必须是 GUI 子系统的启动器：指向 start.cmd 会先弹一个控制台黑框，
+# 快捷方式图标也会变成 cmd 的。缺了就报错，不要悄悄退回去——那是上一版的真实故障。
+$entry = 'WuwaTappoLauncher.exe'
+if (-not (Test-Path -LiteralPath (Join-Path $Source $entry))) {
+  throw "缺少无控制台启动器 $entry：先跑 tools\build-launcher.ps1 -Region $($R.Id)。退用 start.cmd 会让安装包弹黑框、图标错误。"
+}
+
 $makensis = Find-Makensis
 if (-not $makensis) {
   throw "找不到 makensis：先装 NSIS（choco install nsis -y），或把 makensis.exe 加进 PATH。"
 }
-
-# 入口：优先无控制台启动器；没有就退回 start.cmd（会带一个控制台窗口）
-$entry = if (Test-Path -LiteralPath (Join-Path $Source 'WuwaTappoLauncher.exe')) { 'WuwaTappoLauncher.exe' } else { 'start.cmd' }
 
 New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
 if (Test-Path -LiteralPath $exe) { Remove-Item -LiteralPath $exe -Force }
@@ -85,15 +92,34 @@ foreach ($f in $files) {
 }
 Write-Host ("共 {0} 个文件，{1:N1} MB" -f $files.Count, (($files | Measure-Object -Property Length -Sum).Sum / 1MB))
 
-# 图标沿用官方客户端里提取出来的那份；没有就不设，NSIS 用默认图标
-$icon = Get-ChildItem -LiteralPath (Join-Path $R.WorkDir 'official') -Recurse -Filter 'icon_32512.ico' -ErrorAction SilentlyContinue | Select-Object -First 1
-$iconLine = if ($icon) { 'Icon "' + $icon.FullName + '"' } else { '; 未找到官方图标，使用 NSIS 默认图标' }
+# 图标：优先用装配时放进来的 app.ico，退回官方客户端里提取的原件
+$icon = Join-Path $Source 'app.ico'
+if (-not (Test-Path -LiteralPath $icon)) {
+  $icon = Get-ChildItem -LiteralPath (Join-Path $R.WorkDir 'official') -Recurse -Filter 'icon_32512.ico' -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+  if ($icon) { $icon = $icon.FullName }
+}
+# MUI_ICON 必须在 !include MUI2.nsh 之前定义；没有图标就用 NSIS 默认
+$muiIcon = if ($icon -and (Test-Path -LiteralPath $icon)) {
+  '!define MUI_ICON "' + $icon + '"' + "`r`n" + '!define MUI_UNICON "' + $icon + '"'
+} else { '; 未找到官方图标，使用 NSIS 默认图标' }
+$iconFile = if ($icon -and (Test-Path -LiteralPath $icon)) { $icon } else { '' }
 
 $nsi = Join-Path $staging 'installer.nsi'
 $template = @'
 Unicode true
 SetCompressor /SOLID lzma
+
+; MUI_ICON / MUI_UNICON 必须写在 include 之前
+{{MUIICON}}
+
+!include MUI2.nsh
 !include LogicLib.nsh
+
+!define PRODUCT_NAME "{{PRODUCT}}"
+!define PRODUCT_VERSION "{{VERSION}}"
+!define PRODUCT_ENTRY "{{ENTRY}}"
+
 Name "{{PRODUCT}}"
 OutFile "{{PKG}}"
 InstallDir "$LOCALAPPDATA\Programs\{{PRODUCT}}"
@@ -101,12 +127,39 @@ InstallDirRegKey HKCU "Software\{{PRODUCT}}" "InstallDir"
 RequestExecutionLevel user
 ShowInstDetails show
 ShowUninstDetails show
-{{ICON}}
+BrandingText "{{PRODUCT}} {{VERSION}}"
 
-Page directory
-Page instfiles
-UninstPage uninstConfirm
-UninstPage instfiles
+!define MUI_ABORTWARNING
+!define MUI_WELCOMEPAGE_TITLE_3LINES
+!define MUI_WELCOMEPAGE_TITLE "欢迎安装 {{PRODUCT}}"
+!define MUI_WELCOMEPAGE_TEXT "这是一个本地运行的社区整合版客户端。$\r$\n$\r$\n· 装到当前用户目录，不需要管理员权限$\r$\n· 桌面和开始菜单各建一个快捷方式$\r$\n· 依赖系统的 Microsoft Edge WebView2 运行时（Windows 11 自带）$\r$\n$\r$\n点「下一步」继续。"
+!define MUI_DIRECTORYPAGE_TEXT_TOP "请选择安装位置。装好后这个目录里会有程序本体、本地素材服务和运行状态。"
+!define MUI_FINISHPAGE_TITLE "{{PRODUCT}} 已就绪"
+!define MUI_FINISHPAGE_TEXT "装好了。桌面上的快捷方式可以直接双击启动。$\r$\n$\r$\n首次启动会拉起本地素材服务，需要几秒才出窗口。"
+!define MUI_FINISHPAGE_RUN "$INSTDIR\${PRODUCT_ENTRY}"
+!define MUI_FINISHPAGE_RUN_TEXT "立即启动 {{PRODUCT}}"
+!define MUI_FINISHPAGE_NOREBOOTSUPPORT
+
+!insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_DIRECTORY
+!insertmacro MUI_PAGE_INSTFILES
+!insertmacro MUI_PAGE_FINISH
+
+!insertmacro MUI_UNPAGE_CONFIRM
+!insertmacro MUI_UNPAGE_INSTFILES
+
+!insertmacro MUI_LANGUAGE "SimpChinese"
+!insertmacro MUI_LANGUAGE "English"
+
+; 界面语言跟着系统走：简体中文系统出中文，其它出英文
+Function .onInit
+  System::Call 'kernel32::GetUserDefaultUILanguage() i .r0'
+  ${If} $0 == 2052
+    StrCpy $LANGUAGE 2052
+  ${Else}
+    StrCpy $LANGUAGE 1033
+  ${EndIf}
+FunctionEnd
 
 ; 官方客户端不内嵌 WebView2，直接用系统运行时；缺失时只有双击那一刻才由 wry 报错。
 ; 这里把同一个判断提前到安装阶段：不下载、不静默安装，只给官方 Evergreen 入口。
@@ -139,46 +192,105 @@ Function CheckWebView2
   wv2_skip:
 FunctionEnd
 
+; 覆盖安装时程序若在运行，文件会被占用。先安静地结束掉，避免出现「装到一半失败」。
+Function StopRunningApp
+  nsExec::Exec 'taskkill /F /IM {{ENTRY}}'
+  Pop $0
+  nsExec::Exec 'taskkill /F /IM WuwaTappo.Local.exe'
+  Pop $0
+  nsExec::Exec 'taskkill /F /IM LocalGalleryHost.exe'
+  Pop $0
+  Sleep 500
+FunctionEnd
+
 Section "Install"
   SetShellVarContext current
   SetOutPath "$INSTDIR"
+
+  Call StopRunningApp
   File /r "{{PAYLOAD}}\*.*"
   WriteUninstaller "$INSTDIR\uninstall.exe"
 
   Call CheckWebView2
 
+  ; 快捷方式都带图标，否则会显示成启动器的默认小图标
+  {{SHORTCUTICON}}
   CreateDirectory "$SMPROGRAMS\{{PRODUCT}}"
-  CreateShortCut "$SMPROGRAMS\{{PRODUCT}}\{{PRODUCT}}.lnk" "$INSTDIR\{{ENTRY}}"
-  CreateShortCut "$DESKTOP\{{PRODUCT}}.lnk" "$INSTDIR\{{ENTRY}}"
+  CreateShortCut "$SMPROGRAMS\{{PRODUCT}}\{{PRODUCT}}.lnk" "$INSTDIR\${PRODUCT_ENTRY}" "" "{{ICONARG}}" 0
+  CreateShortCut "$SMPROGRAMS\{{PRODUCT}}\卸载 {{PRODUCT}}.lnk" "$INSTDIR\uninstall.exe"
+  CreateShortCut "$DESKTOP\{{PRODUCT}}.lnk" "$INSTDIR\${PRODUCT_ENTRY}" "" "{{ICONARG}}" 0
 
   WriteRegStr HKCU "Software\{{PRODUCT}}" "InstallDir" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\{{PRODUCT}}" "DisplayName" "{{PRODUCT}}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\{{PRODUCT}}" "DisplayVersion" "{{VERSION}}"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\{{PRODUCT}}" "DisplayIcon" "$INSTDIR\{{ENTRY}}"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\{{PRODUCT}}" "DisplayIcon" "{{DISPLAYICON}}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\{{PRODUCT}}" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\{{PRODUCT}}" "UninstallString" "$INSTDIR\uninstall.exe"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\{{PRODUCT}}" "Publisher" "WuwaTappo Full Community"
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\{{PRODUCT}}" "NoModify" 1
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\{{PRODUCT}}" "NoRepair" 1
 SectionEnd
 
 Section "Uninstall"
   SetShellVarContext current
+  nsExec::Exec 'taskkill /F /IM {{ENTRY}}'
+  Pop $0
+  nsExec::Exec 'taskkill /F /IM WuwaTappo.Local.exe'
+  Pop $0
+  nsExec::Exec 'taskkill /F /IM LocalGalleryHost.exe'
+  Pop $0
+  Sleep 500
+
   Delete "$DESKTOP\{{PRODUCT}}.lnk"
   Delete "$SMPROGRAMS\{{PRODUCT}}\{{PRODUCT}}.lnk"
+  Delete "$SMPROGRAMS\{{PRODUCT}}\卸载 {{PRODUCT}}.lnk"
   RMDir "$SMPROGRAMS\{{PRODUCT}}"
-  RMDir /r "$INSTDIR"
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\{{PRODUCT}}"
   DeleteRegKey HKCU "Software\{{PRODUCT}}"
+
+  ; 登录状态和素材缓存动辄上百 MB，重装就要重新同步；让用户自己决定留不留
+  MessageBox MB_YESNO|MB_ICONQUESTION \
+    "是否同时删除本地数据？$\r$\n$\r$\n· 是：素材缓存、登录状态一起清掉，重装后要重新同步$\r$\n· 否：保留这些数据，重装后可以直接接着用" \
+    IDNO keep_data
+  RMDir /r "$INSTDIR"
+  Goto uninst_done
+  keep_data:
+    Delete "$INSTDIR\WuwaTappo.Local.exe"
+    Delete "$INSTDIR\LocalGalleryHost.exe"
+    Delete "$INSTDIR\{{ENTRY}}"
+    Delete "$INSTDIR\app.ico"
+    Delete "$INSTDIR\start.cmd"
+    Delete "$INSTDIR\启动.cmd"
+    Delete "$INSTDIR\launch.ps1"
+    Delete "$INSTDIR\initialize.ps1"
+    Delete "$INSTDIR\restore_network.ps1"
+    Delete "$INSTDIR\README.md"
+    Delete "$INSTDIR\LICENSE"
+    Delete "$INSTDIR\THIRD_PARTY_NOTICES.md"
+    Delete "$INSTDIR\package_config.json"
+    Delete "$INSTDIR\uninstall.exe"
+    RMDir /r "$INSTDIR\_internal"
+    RMDir /r "$INSTDIR\host"
+    RMDir /r "$INSTDIR\docs"
+    RMDir "$INSTDIR"
+  uninst_done:
 SectionEnd
 '@
 
+$shortcutIcon = if ($iconFile) { '' } else { '; 无图标文件，快捷方式沿用可执行文件自带图标' }
+$iconArg = if ($iconFile) { '$INSTDIR\app.ico' } else { '' }
+$displayIcon = if ($iconFile) { '$INSTDIR\app.ico' } else { '$INSTDIR\' + $entry }
+
 $script = $template
+$script = $script.Replace('{{MUIICON}}', $muiIcon)
 $script = $script.Replace('{{PRODUCT}}', $R.ProductName)
 $script = $script.Replace('{{VERSION}}', $version)
 $script = $script.Replace('{{ENTRY}}', $entry)
+$script = $script.Replace('{{SHORTCUTICON}}', $shortcutIcon)
+$script = $script.Replace('{{ICONARG}}', $iconArg)
+$script = $script.Replace('{{DISPLAYICON}}', $displayIcon)
 $script = $script.Replace('{{PKG}}', $exe)
 $script = $script.Replace('{{PAYLOAD}}', $payload)
-$script = $script.Replace('{{ICON}}', $iconLine)
 [IO.File]::WriteAllText($nsi, $script, (New-Object Text.UTF8Encoding($true)))
 
 Write-Host "== 编译安装包（makensis）=="

@@ -1,6 +1,6 @@
 # WuwaTappo Full Community
 
-> `main` 已合入官方国服 **1.0.3** 适配，整合版为 **1.2.2-alpha.1**。`dev` 从 `main` 派生，CI 成功后会自动更新滚动开发版；正式版本仍通过 `v*` 标签发布。详见 [1.0.3 适配记录](docs/OFFICIAL_1.0.3.md)。
+> `main` 已合入官方国服 **1.0.3** 适配，整合版为 **1.2.2-alpha.1**。`dev` 从 `main` 派生，CI 成功后会自动更新滚动开发版；正式版本仍通过 `v*` 标签发布。详见 [1.0.3 适配记录](macos/docs/OFFICIAL_1.0.3.md)。
 
 让《鸣潮》桌宠在 macOS 和 Windows 上运行，并在原有面板中加入本地全图鉴和桌面助手。
 
@@ -8,18 +8,33 @@
 
 ## 平台
 
-本仓库包含两套平台实现，共用同一个上游（库洛官方国服客户端，安装包与 SHA-256 锁在 `upstream-cn.json`）：
+本仓库包含两套平台实现，共用同一个上游（库洛官方国服客户端，安装包与 SHA-256 锁在 `macos/upstream-cn.json`）：
 
 | | macOS | Windows |
 | --- | --- | --- |
-| 位置 | 仓库根（`src-tauri/`、`scripts/`） | [`windows/`](windows/README.md) |
+| 位置 | [`macos/`](macos/README.md)（`src-tauri/`、`scripts/`） | [`windows/`](windows/README.md) |
 | 做法 | Rust / Tauri 原生壳重写 | 给官方客户端打补丁并重打包 PE |
 | 为什么不同 | 官方没有 Mac 包 | 官方包本来能跑，重写没有收益 |
 | 运行时 | 原生 IPC 绑定 | Python 本地服务 + 本机 HTTP |
 | 产物 | `.app` / `.dmg`（约 70 MiB） | 绿色目录（约 1.1 GB） |
-| 文档 | 本 README | [windows/README.md](windows/README.md) |
+| 文档 | [macos/README.md](macos/README.md) | [windows/README.md](windows/README.md) |
 
 两侧的 FullAtlas 前端模块同源，平台差异集中在 3 个文件的各 4 行里，收敛计划见 [windows/README.md](windows/README.md) 末尾。
+
+## 目录结构
+
+```text
+.
+├── macos/          macOS 实现：src-tauri/（Rust）、scripts/（构建与上游同步）、tests/、fullatlas-source/、docs/
+├── windows/        Windows 实现：src/（上游快照）、tools/（PowerShell 构建层）
+├── scripts/        只放跨平台分派器 build-platform.mjs
+├── dist/           两平台共用的产物目录（不入库）
+├── package.json    npm 入口与发版号来源，两侧都读它
+└── licenses/       FullAtlas 许可原文
+```
+
+平台实现不放在仓库根：`macos/` 与 `windows/` 各自闭环，根目录只留两平台都要用的东西。
+这条边界有测试守着（`macos/tests/repo-layout.test.mjs`），平台目录再长回根目录会直接失败。
 
 ## 构建
 
@@ -108,7 +123,7 @@ npm run package
 
 `setup` 下载 `upstream-cn.json` 锁定的官方安装包，核对大小和 SHA-256 后静态提取前端；整个过程不运行 Windows 程序。若已有对应官方原包，可用 `npm run assets:sync -- --installer /绝对路径/安装包.exe`，然后执行 `npm run icons` 和 `npm run prepare:frontend`。
 
-构建应用位于 `src-tauri/target/release/bundle/macos/`，ZIP / DMG 位于 `dist/`。官方解包资源、依赖、安装包和用户数据不提交到源码仓库。清洁检出需要先执行 `setup`，部分测试需要已准备的前端。
+构建应用位于 `macos/src-tauri/target/release/bundle/macos/`，ZIP / DMG 位于仓库根的 `dist/`（两平台共用这个交付目录）。官方解包资源、依赖、安装包和用户数据不提交到源码仓库。清洁检出需要先执行 `setup`，部分测试需要已准备的前端。
 
 ## 如何跟进官方更新
 
@@ -121,7 +136,7 @@ npm run package
 - FullAtlas 集成器同时核对官方版本和安装包摘要。未知版本不会只靠修改版本号进入正式构建。
 - `main` 和 `dev` 的 CI 都构建国服整合版。`dev` 的 CI 成功后会自动创建或更新 `dev` 滚动预发布版；版本标签触发的 Release 工作流只生成**草稿预发布**，需要维护者验收后手动发布.
 
-在你的仓库启用 Actions 后这些工作流才会运行。定时同步需要在仓库设置中允许 Actions 创建 Pull Request，首次发布步骤见 [GitHub 发布指南](docs/PUBLISHING.md)。[官方更新流水线](docs/OFFICIAL_UPDATE_PIPELINE.md) 和 [来源与更新记录](docs/official-update-status-2026-10-30.md) 保留实现边界与核验信息。
+在你的仓库启用 Actions 后这些工作流才会运行。定时同步需要在仓库设置中允许 Actions 创建 Pull Request，首次发布步骤见 [GitHub 发布指南](macos/docs/PUBLISHING.md)。[官方更新流水线](macos/docs/OFFICIAL_UPDATE_PIPELINE.md) 和 [来源与更新记录](macos/docs/official-update-status-2026-10-30.md) 保留实现边界与核验信息。
 
 这条流水线不能在已安装的 Mac 应用内部运行：官方提供的是 Windows EXE，转换需要 Node、7-Zip、Rust、Xcode 工具链和完整源码。桌宠可以检测并提示新 Mac Release，但下载、构建和替换应用必须由维护者或 GitHub Actions 完成。
 

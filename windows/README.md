@@ -2,14 +2,14 @@
 
 这个目录是本仓库的 Windows 平台实现。和 macOS 侧**不是同一套机制**，先看区别再动手：
 
-| | macOS（仓库根目录） | Windows（本目录） |
+| | macOS（[`macos/`](../macos/)） | Windows（本目录） |
 | --- | --- | --- |
 | 做法 | 用 Rust / Tauri 重写壳 | 给官方 Windows 客户端打补丁并重打包 |
 | 为什么 | 官方没有 Mac 包 | 官方包本来就能跑，重写没有收益 |
 | 运行时 | 原生 IPC 绑定 | Python 本地服务 + 本机 HTTP（端口 43229） |
 | 产物 | `.app` / `.dmg`（约 70 MiB） | 绿色目录（约 1.1 GB，含 3098 张图） |
 
-两侧共用同一条上游：库洛官方国服客户端（同一个安装包，SHA-256 在仓库根的 `upstream-cn.json` 里锁着）。
+两侧共用同一条上游：库洛官方国服客户端（同一个安装包，SHA-256 在 [`macos/upstream-cn.json`](../macos/upstream-cn.json) 里锁着）。
 
 ## 产物形态
 
@@ -93,20 +93,20 @@ windows\
 
 ## 和 macOS 侧怎么分工
 
-`src\`、`tools\`、`docs\` 三个名字两边都有，但不是重复劳动：
+`tools\`、`docs\` 两个名字两边都有，但不是重复劳动：
 
-| | macOS（仓库根） | Windows（本目录） | 能否共用 |
+| | macOS（`macos/`） | Windows（本目录） | 能否共用 |
 | --- | --- | --- | --- |
-| 运行时 | `src-tauri\src\*.rs`，Rust + Tauri IPC | `src\src\*.py`，Python 本机 HTTP 服务 | 不能。范式不同 |
-| 构建层 | `scripts\*.mjs`、`package-macos.sh`、dmg | `tools\*.ps1`、PyInstaller、PE 重打包 | 不能。工具链不同 |
-| 注入器 | `tools\fullatlas-integration.py`（改 Tauri 资源） | `src\tools\build_integration.py`（改 PE 资源段） | 不能。注入目标不同 |
-| 前端模块 | `fullatlas-source\*.js` | `src\src\*.js` | **共用**，见下 |
+| 运行时 | `macos\src-tauri\src\*.rs`，Rust + Tauri IPC | `src\src\*.py`，Python 本机 HTTP 服务 | 不能。范式不同 |
+| 构建层 | `macos\scripts\*.mjs`、`package-macos.sh`、dmg | `tools\*.ps1`、PyInstaller、PE 重打包 | 不能。工具链不同 |
+| 注入器 | `macos\tools\fullatlas-integration.py`（改 Tauri 资源） | `src\tools\build_integration.py`（改 PE 资源段） | 不能。注入目标不同 |
+| 前端模块 | `macos\fullatlas-source\*.js` | `src\src\*.js` | **共用**，见下 |
 
 **唯一真正共用的是那 3 个前端模块**（`assistant_dashboard.js`、`desktop_assistant.js`、`local_atlas_controller.js`），各只差 4 行：品牌文案、更新监控卡、`VERSION` 常量、以及 `assetsHost` / `request` 的取值方式。
 
-它们**没有**并成一份，原因是 `src\` 是上游仓库的完整快照，改动靠 `tools\patches\1.0.3-adaptation.diff` 存档；抽公共件会让「上游 v1.2 → v1.3」的同步失去可比对基线。代价由 `tests\platform-parity.test.mjs` 兜住：两侧差异一旦超过 4 行（也就是只改了一边），CI 直接失败。
+它们**没有**并成一份，原因是 `src\` 是上游仓库的完整快照，改动靠 `tools\patches\1.0.3-adaptation.diff` 存档；抽公共件会让「上游 v1.2 → v1.3」的同步失去可比对基线。代价由 `macos\tests\platform-parity.test.mjs` 兜住：两侧差异一旦超过 4 行（也就是只改了一边），CI 直接失败。
 
-两份 `integrate_assistant.py`（根的 `tools\` 与本目录的 `src\tools\`）同理：根的那份面向 1.0.3 并兼容双版本绑定，这份面向上游 1.0.2 布局、改 `src\` 下的模块，差异是有意的，不是漏同步。
+两份 `integrate_assistant.py`（`macos\tools\` 与本目录的 `src\tools\`）同理：前一份面向 1.0.3 并兼容双版本绑定，这份面向上游 1.0.2 布局、改 `src\` 下的模块，差异是有意的，不是漏同步。
 
 ## 官方更新怎么跟
 

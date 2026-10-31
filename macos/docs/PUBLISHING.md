@@ -29,7 +29,7 @@ npm run official:update                 # 只检测官方版本
 npm run official:update -- --apply      # 下载、适配、测试、构建并打包
 ```
 
-`--apply` 失败会恢复 `upstream-cn.json` 和已提取前端；未知官方版本会在 FullAtlas 版本 / SHA-256 / 契约门禁处停止。构建成功后检查 `.work/official-update-result.json`，再提交资源锁和适配代码。不要把 Windows EXE 或临时构建缓存上传到源码仓库。
+`--apply` 失败会恢复 `upstream-cn.json` 和已提取前端；未知官方版本会在 FullAtlas 版本 / SHA-256 / 契约门禁处停止。构建成功后检查 `macos/.work/official-update-result.json`，再提交资源锁和适配代码。不要把 Windows EXE 或临时构建缓存上传到源码仓库。
 
 构建工作流的下载镜像指向当前仓库自己的 `upstream-resources` Release。没有镜像时首先从官方源下载；不要复制别人的凭据或私有下载链接。
 

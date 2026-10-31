@@ -37,10 +37,10 @@ jobs:
           node-version: '24'
       - uses: actions/download-artifact@v4
         with:
-          pattern: WuwaTappo-*-Mac-arm64
+          pattern: WuwaTappo-*
           merge-multiple: true
           path: dist
-      - name: Create draft FullAtlas Mac release
+      - name: Create draft FullAtlas release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -53,6 +53,13 @@ jobs:
             PACKAGES=(dist/WuwaTappo-FullAtlas-Mac-*-arm64."$EXT")
             [[ ${#PACKAGES[@]} -eq 1 && -f "${PACKAGES[0]}" ]]
           done
+          # Windows 产物为可选：历史 tag 或 Windows 构建失败时仍能发 Mac 版
+          if compgen -G 'dist/*Windows-x64*.zip' > /dev/null; then
+            echo "包含 Windows 产物："
+            ls -la dist/*Windows-x64*
+          else
+            echo "::warning::没有 Windows 产物，本次发布仅含 macOS"
+          fi
           node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync, existsSync } from 'node:fs';
           const version = JSON.parse(readFileSync('package.json', 'utf8')).version;
@@ -69,8 +76,13 @@ jobs:
             : `# WuwaTappo FullAtlas Mac ${version}\n\n官方国服基底 ${official}，Apple Silicon / macOS 13 及以上。实验预发布，完整业务仍需验收。\n`;
           writeFileSync('/tmp/release-notes.md', `${body}\n\n官方资源版本：${official}。此 Release 保持草稿，待维护者验收后手动发布。\n`);
           NODE
+          # 收集产物：mac 的 zip/dmg 必须存在，Windows zip 与校验和按需追加
+          FILES=(dist/*.zip dist/*.dmg)
+          if compgen -G 'dist/*.sha256' > /dev/null; then
+            FILES+=(dist/*.sha256)
+          fi
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/*.zip dist/*.dmg --clobber
+            gh release upload "$TAG" "${FILES[@]}" --clobber
           else
-            gh release create "$TAG" dist/*.zip dist/*.dmg --verify-tag --title "WuwaTappo FullAtlas Mac $TAG" --notes-file /tmp/release-notes.md --draft --prerelease
+            gh release create "$TAG" "${FILES[@]}" --verify-tag --title "WuwaTappo FullAtlas $TAG" --notes-file /tmp/release-notes.md --draft --prerelease
           fi

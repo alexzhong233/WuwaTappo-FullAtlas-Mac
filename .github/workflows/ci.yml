@@ -16,3 +16,7 @@ concurrency:
 jobs:
   build:
     uses: ./.github/workflows/build.yml
+  build-windows:
+    uses: ./.github/workflows/build-windows.yml
+    # Windows 侧要下载 ~200MB 官方安装包并跑 PyInstaller，首次构建较慢；
+    # 缓存命中后约 10 分钟。失败不阻断 macOS 产物（两个 job 独立）。

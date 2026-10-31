@@ -1,0 +1,81 @@
+name: Build Windows
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Git revision to build
+        required: false
+        type: string
+        default: ''
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: windows-x64
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Read pinned official client identity
+        id: pinned
+        shell: pwsh
+        run: |
+          $lock = Get-Content windows/upstream-win.json -Raw | ConvertFrom-Json
+          "version=$($lock.client_version)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          $bytes = [Text.Encoding]::UTF8.GetBytes([string]$lock.installer_url)
+          $sha = [Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
+          $hex = -join ($sha | ForEach-Object { $_.ToString('x2') })
+          "urlhash=$($hex.Substring(0,16))" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Restore pinned official installer
+        id: installer-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: windows/build/official
+          key: windows-official-${{ steps.pinned.outputs.version }}-${{ steps.pinned.outputs.urlhash }}
+
+      - name: Build, patch and package
+        shell: pwsh
+        env:
+          # 无图形界面的 runner 上回退系统 WebView2，产物体积从 ~700MB 降到 ~130MB
+          WUWA_PYTHON: ${{ env.pythonLocation }}\python.exe
+        run: |
+          node scripts/build-platform.mjs --platform=win --package --no-runtime
+
+      - name: Save pinned official installer
+        if: steps.installer-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: windows/build/official
+          key: windows-official-${{ steps.pinned.outputs.version }}-${{ steps.pinned.outputs.urlhash }}
+
+      - name: Report artifact
+        shell: pwsh
+        run: |
+          Get-ChildItem dist -Filter *Windows* -ErrorAction SilentlyContinue |
+            Select-Object Name, @{n='MB';e={[math]::Round($_.Length/1MB,1)}} | Format-Table -AutoSize
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WuwaTappo-FullAtlas-Windows-x64
+          path: |
+            dist/*Windows-x64*.zip
+            dist/*Windows-x64*.zip.sha256
+          if-no-files-found: error
+          retention-days: 14

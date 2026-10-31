@@ -210,10 +210,33 @@ if ($OfficialExe) {
       "已存在，跳过下载: $setup"
     } else {
       "== 2/4 下载安装包 =="
-      $dl = New-Object System.Net.WebClient
-      $dl.Proxy = $null
-      $dl.Headers.Add('User-Agent', 'WuwaTappo-FullAtlas-Fetch/1.0')
-      try { $dl.DownloadFile($url, $setup) } finally { $dl.Dispose() }
+      # WebClient 的 100 秒上限对 200 MB 的官方包太紧，CDN 一慢就整条链失败
+      # （CI 上已经因为 "operation has timed out" 挂过）。改用 HttpClient 并给 30 分钟，
+      # 失败重试 3 次，每次清掉半截文件。
+      Add-Type -AssemblyName System.Net.Http | Out-Null
+      $attempt = 0
+      while ($true) {
+        $attempt++
+        $client = $null
+        try {
+          $client = New-Object System.Net.Http.HttpClient
+          $client.Timeout = [TimeSpan]::FromMinutes(30)
+          $client.DefaultRequestHeaders.Add('User-Agent', 'WuwaTappo-FullAtlas-Fetch/1.0')
+          $response = $client.GetAsync($url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+          $response.EnsureSuccessStatusCode() | Out-Null
+          $stream = $response.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
+          $file = [IO.File]::Create($setup)
+          try { $stream.CopyTo($file) } finally { $file.Dispose(); $stream.Dispose(); $response.Dispose() }
+          break
+        } catch {
+          if (Test-Path -LiteralPath $setup) { Remove-Item -LiteralPath $setup -Force -ErrorAction SilentlyContinue }
+          if ($attempt -ge 3) { throw "安装包下载失败（已重试 3 次）：$url`n$($_.Exception.Message)" }
+          "下载失败（第 $attempt 次）：$($_.Exception.Message)，10 秒后重试"
+          Start-Sleep -Seconds 10
+        } finally {
+          if ($client) { $client.Dispose() }
+        }
+      }
       "下载完成: {0:N1} MB" -f ((Get-Item -LiteralPath $setup).Length / 1MB)
     }
   } else {

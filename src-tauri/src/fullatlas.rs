@@ -411,4 +411,303 @@ impl FullAtlasState {
                     }
                     let cutoff = (Local::now().date_naive() - Days::days(90)).to_string();
                     inner.saved.days.retain(|date, _| date >= &cutoff);
-                    inner.runtime.values = json!({"total":total,"balance":body
+                    inner.runtime.values = json!({"total":total,"balance":body.get("balance"),"logged_in":body.get("logged_in")==Some(&Value::Bool(true)),"chests":body.get("chests"),"local_atlas":inner.saved.enabled,"quiet":physical_quiet,"connected":true,"seen_at":unix_time()});
+                }
+                if action == "tick" {
+                    let allowed = inner.saved.settings.enabled
+                        && physical_quiet
+                        && inner.runtime.next_tick.is_none_or(|t| Instant::now() >= t);
+                    if allowed {
+                        inner.runtime.next_tick = Some(
+                            Instant::now()
+                                + Duration::from_secs_f64(
+                                    1.0 / f64::from(inner.saved.settings.speed),
+                                ),
+                        );
+                    }
+                    self.save(&mut inner, false)?;
+                    return Ok(
+                        json!({"allowed":allowed,"quiet":physical_quiet,"settings":inner.saved.settings,"session":inner.saved.session,"confirmed":inner.saved.confirmed,
+                        "flush_generation":if inner.runtime.flush_generation>inner.runtime.flush_done{inner.runtime.flush_generation}else{0},"update_required":false,"quit":false}),
+                    );
+                }
+            }
+            "reward" => {
+                let reward = body
+                    .get("reward")
+                    .and_then(Value::as_object)
+                    .ok_or("奖励必须是对象")?;
+                let id = reward
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .filter(|v| !v.is_empty() && v.len() <= 120)
+                    .ok_or("奖励事件 ID 无效")?;
+                if reward.get("confirmed") != Some(&Value::Bool(true))
+                    || !matches!(
+                        reward.get("side").and_then(Value::as_str),
+                        Some("left" | "right")
+                    )
+                    || reward.get("asset_name").and_then(Value::as_str).is_none()
+                    || reward.get("cost").and_then(Value::as_u64).unwrap_or(0) == 0
+                {
+                    return Err("只保存原版服务器确认的奖励".into());
+                }
+                if !inner
+                    .saved
+                    .rewards
+                    .iter()
+                    .any(|r| r.get("id").and_then(Value::as_str) == Some(id))
+                {
+                    let mut record = json!({"time":unix_time(),"confirmed":true});
+                    for field in [
+                        "id",
+                        "side",
+                        "asset_id",
+                        "asset_type",
+                        "asset_name",
+                        "name",
+                        "rarity",
+                        "cost",
+                        "source",
+                    ] {
+                        if let Some(value) = reward.get(field) {
+                            record[field] = value.clone();
+                        }
+                    }
+                    inner.saved.rewards.insert(0, record);
+                    inner.saved.rewards.truncate(1000);
+                    inner.saved.session_chests += 1;
+                }
+            }
+            "room" => {
+                if inner.saved.enabled {
+                    return Err("本地图鉴开启时不能加入房间".into());
+                }
+                let code = body
+                    .get("code")
+                    .and_then(Value::as_str)
+                    .filter(|s| {
+                        !s.is_empty()
+                            && s.len() <= 32
+                            && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+                    })
+                    .ok_or("房间号无效")?;
+                let favorite = inner
+                    .saved
+                    .rooms
+                    .iter()
+                    .find(|r| r["code"] == code)
+                    .is_some_and(|r| r["favorite"] == true);
+                inner.saved.rooms.retain(|r| r["code"] != code);
+                inner.saved.rooms.insert(0,json!({"code":code,"host":body.get("host").and_then(Value::as_str).unwrap_or("").chars().take(100).collect::<String>(),"favorite":favorite,"visited":unix_time()}));
+                inner.saved.rooms.sort_by_key(|r| r["favorite"] != true);
+                inner.saved.rooms.truncate(100);
+            }
+            "favorite" => {
+                for room in &mut inner.saved.rooms {
+                    if room.get("code") == body.get("code") {
+                        room["favorite"] = json!(body.get("favorite") == Some(&Value::Bool(true)));
+                    }
+                }
+                inner.saved.rooms.sort_by_key(|r| r["favorite"] != true);
+            }
+            "monitor" => {
+                let value = body.get("monitor").cloned().unwrap_or(Value::Null);
+                if !value.is_null() && value.get("name").and_then(Value::as_str).is_none() {
+                    return Err("显示器信息无效".into());
+                }
+                inner.saved.monitor = Some(value);
+            }
+            "reset" => {
+                inner.saved.session = 0;
+                inner.saved.confirmed = 0;
+                inner.saved.session_chests = 0;
+            }
+            "flush-request" => {
+                inner.runtime.flush_generation += 1;
+                return Ok(json!({"flush_generation":inner.runtime.flush_generation}));
+            }
+            "flush-ack" => {
+                if let Some(n) = body.get("generation").and_then(Value::as_u64) {
+                    if n >= inner.runtime.flush_done && n <= inner.runtime.flush_generation {
+                        inner.runtime.flush_done = n;
+                    }
+                }
+            }
+            _ => return Err(format!("未知助手操作：{action}")),
+        }
+        self.save(
+            &mut inner,
+            action != "observe" || body.get("flush") == Some(&Value::Bool(true)),
+        )?;
+        Ok(Self::snapshot(&inner))
+    }
+    fn request(
+        &self,
+        app: &AppHandle,
+        label: &str,
+        action: &str,
+        body: &Value,
+    ) -> Result<Value, String> {
+        if label != "main"
+            && matches!(
+                action,
+                "assistant/tick"
+                    | "assistant/observe"
+                    | "assistant/reward"
+                    | "assistant/room"
+                    | "assistant/monitor"
+                    | "assistant/renderer-start"
+                    | "assistant/flush-ack"
+            )
+        {
+            return Err("该操作仅允许主桌宠执行".into());
+        }
+        match action {
+            "official/update-check" => official_update_status(crate::profile::Region::from_app(app)),
+            "status"=>Ok(json!({"ready":true,"enabled":self.enabled(),"mode_verified":true,"network_policy":"rooms-only","sync":{"status":"idle"}})),
+            "offline-data"=>self.catalog(app,false),
+            "sync"=>self.catalog(app,true).map(|v|json!({"status":"complete","checked_at":unix_time(),"result":{"changed":true,"assets_json_ts":v["assets_json_ts"],"atlas_count":v["atlas"].as_array().map(Vec::len).unwrap_or(0)}})),
+            "mode"=>{let enabled=body.get("enabled").and_then(Value::as_bool).ok_or("模式必须是布尔值")?; if enabled{self.catalog(app,false)?;}let mut inner=self.inner.lock().map_err(|_|"全图鉴数据锁失败")?;inner.saved.enabled=enabled;self.save(&mut inner,true)?;drop(inner);if enabled{crate::socket::shutdown(app);}app.emit("fullatlas-mode-changed",enabled).map_err(|e|e.to_string())?;Ok(json!({"enabled":enabled,"mode_verified":true,"network_policy":"rooms-only"}))},
+            "update/status"|"update/check"|"update/healthy"=>Ok(json!({"required":false,"version":env!("CARGO_PKG_VERSION"),"message":UPDATE_MESSAGE})),
+            "update/install"=>Err(UPDATE_MESSAGE.into()),
+            "diagnostic"=>Ok(json!({"ok":true})),
+            name if name.starts_with("assistant/")=>{let quiet=app.state::<crate::input::InputMonitor>().status().running&&crate::input::physical_input_quiet();self.assistant(name.trim_start_matches("assistant/"),body,quiet)},
+            _=>Err(format!("未知全图鉴操作：{action}")),
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn fullatlas_request(
+    app: AppHandle,
+    window: WebviewWindow,
+    action: String,
+    payload: Option<Value>,
+) -> Result<Value, String> {
+    if !local_window(window.label(), &window.url().map_err(|e| e.to_string())?) {
+        return Err("全图鉴仅允许本机主窗口与面板访问".into());
+    }
+    let body = payload.unwrap_or_else(|| json!({}));
+    if !body.is_object() || serde_json::to_vec(&body).map_err(|e| e.to_string())?.len() > 16384 {
+        return Err("全图鉴请求格式无效或过大".into());
+    }
+    let label = window.label().to_owned();
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<FullAtlasState>()
+            .request(&app, &label, &action, &body)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn state() -> FullAtlasState {
+        FullAtlasState::new(std::env::temp_dir().join(format!(
+                "fullatlas-{}-{}",
+                std::process::id(),
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            )))
+        .unwrap()
+    }
+    #[test]
+    fn assistant_uses_baselines_and_limits_rate() {
+        let s = state();
+        s.assistant("observe", &json!({"account":"a","total":100}), true)
+            .unwrap();
+        s.assistant("observe", &json!({"account":"a","total":115}), true)
+            .unwrap();
+        s.assistant("observe", &json!({"account":"b","total":900}), true)
+            .unwrap();
+        s.assistant(
+            "configure",
+            &json!({"settings":{"enabled":true,"speed":10}}),
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            s.assistant("tick", &json!({}), false).unwrap()["allowed"],
+            false
+        );
+        assert_eq!(
+            s.assistant("tick", &json!({}), true).unwrap()["allowed"],
+            true
+        );
+        assert_eq!(
+            s.assistant("tick", &json!({}), true).unwrap()["allowed"],
+            false
+        );
+        let snapshot = s.assistant("state", &json!({}), true).unwrap();
+        assert_eq!(
+            snapshot["weekly"]["normal"]
+                .as_array()
+                .unwrap()
+                .last()
+                .unwrap()["count"],
+            15
+        );
+        assert!(s
+            .assistant("configure", &json!({"settings":{"speed":20}}), true)
+            .is_err());
+    }
+    #[test]
+    fn rewards_require_confirmation_and_deduplicate() {
+        let s = state();
+        let r = json!({"reward":{"id":"a","side":"left","confirmed":true,"asset_name":"skin","cost":1000}});
+        s.assistant("reward", &r, false).unwrap();
+        s.assistant("reward", &r, false).unwrap();
+        let v = s.assistant("state", &json!({}), false).unwrap();
+        assert_eq!(v["rewards"].as_array().unwrap().len(), 1);
+        assert_eq!(v["session_chests"], 1);
+        assert!(s
+            .assistant("reward", &json!({"reward":{"id":"fake"}}), false)
+            .is_err());
+        s.assistant("reset", &json!({}), false).unwrap();
+        assert_eq!(
+            s.assistant("state", &json!({}), false).unwrap()["rewards"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+    #[test]
+    fn saved_mode_and_auto_tasks_are_independent() {
+        let s = state();
+        s.assistant("configure", &json!({"settings":{"enabled":true}}), false)
+            .unwrap();
+        assert!(!s.enabled());
+        let loaded = FullAtlasState::new(s.dir.clone()).unwrap();
+        assert_eq!(
+            loaded.assistant("state", &json!({}), false).unwrap()["settings"]["enabled"],
+            true
+        );
+    }
+    #[test]
+    fn only_local_main_and_panel_can_control() {
+        for label in ["main", "panel"] {
+            assert!(local_window(
+                label,
+                &Url::parse("tauri://localhost/index.html").unwrap()
+            ));
+        }
+        assert!(!local_window(
+            "login",
+            &Url::parse("tauri://localhost/index.html").unwrap()
+        ));
+        assert!(!local_window(
+            "main",
+            &Url::parse("https://example.com").unwrap()
+        ));
+        assert!(trusted_asset_url(
+            crate::profile::Region::Cn,
+            "https://evil.invalid/catalog.json"
+        )
+        .is_err());
+    }
+}

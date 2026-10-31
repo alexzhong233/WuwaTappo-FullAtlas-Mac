@@ -10,7 +10,7 @@
 | 工具链 | Node + Rust + Xcode CLT + 7-Zip | PowerShell + Python + PyInstaller |
 | 产物 | `.app` / `.dmg`（约 70 MiB） | 绿色目录（约 1.1 GB） |
 
-两侧共用同一条上游：库洛官方国服客户端，安装包与 SHA-256 锁在本目录的 `upstream-cn.json`。
+两侧共用同一套构建链，但各自锁定自己那一条上游：国服 `upstream-cn.json`、国际服 `upstream-global.json`（都在本目录，安装包直链与 SHA-256 一并锁住）。服务区域由 `scripts/regions.mjs` 单点定义，构建脚本一律通过 `WUWA_REGION` 取，不各写一份。
 
 ## 目录
 
@@ -23,7 +23,7 @@ macos/
 ├─ fullatlas-source/     共用前端模块的 Mac 侧副本（与 windows/src 的差异锁在 4 行内）
 ├─ docs/                 官方版本适配记录、更新流水线、发布步骤、Release Notes
 ├─ upstream-cn.json      国服官方客户端锁定版本、安装包直链与 SHA-256
-├─ upstream-global.json  国际服同上（代码保留，不作为发行目标）
+├─ upstream-global.json  国际服同上（版本与国服同步跟新）
 └─ rust-toolchain.toml   Rust 版本固定（1.97.1，CI 与本地共用）
 ```
 
@@ -45,6 +45,26 @@ npm run build:mac -- --package   # 上面两步合一，走跨平台分派器
 ```
 
 产物统一落在**仓库根的 `dist/`**，与 Windows 侧同一个交付目录；临时日志与中间状态落在本目录的 `.work/`，不进仓库。
+
+## 国际服
+
+同一套脚本，换个区域标识即可；CI 的 `build / cn`、`build / global` 两个 job 就是这么跑的：
+
+```bash
+npm run setup:global   # = WUWA_REGION=global npm run setup
+npm run build:global
+npm run package:global # 产物名 WuwaTappo-Global-Community-*
+```
+
+区域差异全部由 `scripts/regions.mjs` 的 profile 决定：`frontend`/`frontend-global`、`build/frontend`/`build/frontend-global`、`icons`/`icons-global`、`tauri.conf.json`/`tauri.global.conf.json`、以及产物前缀。两者**不能交叉**：`prepare-frontend.mjs` 会校验入口模块里是否写着对应区域的 `APP_REGION`，`network-smoke.mjs` 还会拒绝另一服的源码，串了会直接报错而不是静默构建出错的包。
+
+契约快照同样分两份（`tests/contracts.json`、`tests/contracts-global.json`），官方版本一变就要重新生成：
+
+```bash
+WUWA_REGION=global node macos/scripts/inventory-contract.mjs   # 覆盖 tests/contracts-global.json
+```
+
+`tests/network-contract-global.json` 是手写约束，不会自动生成，但里面的 `application` 版本号和 `source` 四个入口文件名要跟着改，否则测试会以 ENOENT 或版本不一致失败。
 
 ## 与 Windows 侧怎么分工
 

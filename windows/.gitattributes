@@ -1,0 +1,3 @@
+# Windows 侧文件按原样存取：避免 core.autocrlf 在检出时把 LF 改写成 CRLF。
+# 这些文件里有带 BOM 的 PowerShell 脚本和要注入前端的 JS，换行符不做隐式转换。
+* -text

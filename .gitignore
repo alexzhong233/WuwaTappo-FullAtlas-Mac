@@ -20,3 +20,18 @@
 *.p12
 *.p8
 .DS_Store
+
+# Windows 侧产物与缓存（源码在 windows/，构建产物不入库）
+/windows/app/
+/windows/build/
+/windows/.venv/
+/windows/assets/
+/windows/runtime/
+/windows/cache/
+/windows/cache_*/
+/windows/*.log
+/windows/local_config.json
+/windows/offline_state.json
+/windows/assistant_state.json
+__pycache__/
+*.pyc

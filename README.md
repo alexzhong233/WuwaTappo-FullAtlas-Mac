@@ -6,6 +6,21 @@
 
 基于 [wuwa-tappo-mac](https://github.com/Last-emo-boy/wuwa-tappo-mac) 的 Rust / Tauri macOS 后端，以及 [WuwaTappo-FullAtlas](https://github.com/Averionx/WuwaTappo-FullAtlas) 的图鉴和助手功能开发。无需 Windows、Wine 或虚拟机。本项目为非官方社区整合版，与库洛官方及两个上游项目的发行渠道独立。
 
+## 平台
+
+本仓库包含两套平台实现，共用同一个上游（库洛官方国服客户端，安装包与 SHA-256 锁在 `upstream-cn.json`）：
+
+| | macOS | Windows |
+| --- | --- | --- |
+| 位置 | 仓库根（`src-tauri/`、`scripts/`） | [`windows/`](windows/README.md) |
+| 做法 | Rust / Tauri 原生壳重写 | 给官方客户端打补丁并重打包 PE |
+| 为什么不同 | 官方没有 Mac 包 | 官方包本来能跑，重写没有收益 |
+| 运行时 | 原生 IPC 绑定 | Python 本地服务 + 本机 HTTP |
+| 产物 | `.app` / `.dmg`（约 70 MiB） | 绿色目录（约 1.1 GB） |
+| 文档 | 本 README | [windows/README.md](windows/README.md) |
+
+两侧的 FullAtlas 前端模块同源，平台差异集中在 3 个文件的各 4 行里，收敛计划见 [windows/README.md](windows/README.md) 末尾。
+
 ## 支持情况
 
 | 项目 | 当前状态 |

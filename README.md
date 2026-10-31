@@ -1,6 +1,6 @@
 # WuwaTappo FullAtlas Mac
 
-> 当前为 `official-1.0.3` 实验分支：整合版 **1.2.2-alpha.1**，基于官方国服 **1.0.3**。已完成测试、构建与基础窗口检查，尚未完成账号及输入权限实机验收。`main` 保留基于官方 1.0.2 的 1.2.1 预览版。详见 [1.0.3 适配记录](docs/OFFICIAL_1.0.3.md)。
+> `main` 已合入官方国服 **1.0.3** 适配，整合版为 **1.2.2-alpha.1**。`dev` 从 `main` 派生，CI 成功后会自动更新滚动开发版；正式版本仍通过 `v*` 标签发布。详见 [1.0.3 适配记录](docs/OFFICIAL_1.0.3.md)。
 
 让《鸣潮》桌宠在 Mac 上运行，并在原有面板中加入本地全图鉴和桌面助手。
 
@@ -38,7 +38,7 @@ npm run build:check -- --platform=win
 
 | 场景 | 产出 |
 | --- | --- |
-| push 到 `main` | CI 同时跑 `build.yml`（macos-15）与 `build-windows.yml`（windows-2022），各自上传 artifact |
+| push 到 `main` / `dev` | CI 同时跑 `build.yml`（macos-15）与 `build-windows.yml`（windows-2022），各自上传 artifact |
 | 打 tag `v*` | 两个平台的产物一起进同一个 Release（Windows 缺失时只发 macOS，不阻断） |
 
 Windows 侧版本由 `windows/upstream-win.json` 锁定，不会因为官方发新版就静默构建未适配的版本。
@@ -50,7 +50,7 @@ Windows 侧版本由 `windows/upstream-win.json` 锁定，不会因为官方发�
 | 服务区域 | 国服；国际服代码保留自上游，未整合 FullAtlas，不作为本项目发行目标 |
 | 系统 | macOS：Apple Silicon（M 系列），macOS 13 及以上；Windows：10/11 x64 |
 | 整合版本 | 1.2.2-alpha.1 实验版，基于官方国服 1.0.3 与 FullAtlas v1.2 |
-| 分支 | `main` 为 1.0.3 基底；两个平台同仓共用 |
+| 分支 | `main` 为 1.0.3 基底，两个平台同仓共用；`dev` 用于开发版；`official-1.0.3` 保留为历史适配分支 |
 | 验证 | 自动测试、原生构建、签名与 ZIP / DMG 校验通过；角色和设置面板可显示，完整业务仍需实机验收 |
 | 签名 | Ad hoc 临时签名，未通过 Apple 公证 |
 
@@ -116,7 +116,7 @@ npm run package
 - 应用内的「更新本地图鉴」刷新目录数据，不升级程序或接口适配器。
 - `.github/workflows/sync-upstream.yml` 每日 **10:17（北京时间）** 检查国服更新。经静态提取、接口差异、测试、构建与打包验证后创建更新 PR；不兼容候选保持草稿，不自动合并。
 - FullAtlas 集成器同时核对官方版本和安装包摘要。未知版本不会只靠修改版本号进入正式构建。
-- CI 只构建国服整合版。版本标签触发的 Release 工作流只生成**草稿预发布**，需要维护者验收后手动发布。
+- `main` 和 `dev` 的 CI 都构建国服整合版。`dev` 的 CI 成功后会自动创建或更新 `dev` 滚动预发布版；版本标签触发的 Release 工作流只生成**草稿预发布**，需要维护者验收后手动发布.
 
 在你的仓库启用 Actions 后这些工作流才会运行。定时同步需要在仓库设置中允许 Actions 创建 Pull Request，首次发布步骤见 [GitHub 发布指南](docs/PUBLISHING.md)。[官方更新流水线](docs/OFFICIAL_UPDATE_PIPELINE.md) 和 [来源与更新记录](docs/official-update-status-2026-10-30.md) 保留实现边界与核验信息。
 

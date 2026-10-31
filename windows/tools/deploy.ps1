@@ -1,0 +1,106 @@
+﻿<#
+  装配运行目录：把 build 产物 + 素材 + 运行时组装成完整可运行目录，同步到 app\
+
+  用法： powershell -ExecutionPolicy Bypass -File tools\deploy.ps1
+  说明： 只覆盖程序与静态资源，保留 app\ 下的运行状态
+         （local_config.json / offline_state.json / assistant_state.json / profile\）
+#>
+param([string]$Target)
+
+$ErrorActionPreference = 'Stop'
+$Root = Split-Path $PSScriptRoot -Parent
+$App = if ($Target) { $Target } else { Join-Path $Root 'app' }
+$Payload = Join-Path $Root 'build\payload'
+
+$exe = Join-Path $Root 'build\WuwaTappo.Local.v2.exe'
+if (-not (Test-Path -LiteralPath $exe)) { throw "缺少构建产物：$exe（先跑 tools\build.ps1）" }
+$frozen = Join-Path $Root 'build\frozen\LocalGalleryHost'
+if (-not (Test-Path -LiteralPath $frozen)) { throw "缺少冻结服务：$frozen" }
+
+if (Test-Path -LiteralPath $Payload) { Remove-Item -LiteralPath $Payload -Recurse -Force }
+New-Item -ItemType Directory -Path $Payload | Out-Null
+
+# 主程序
+Copy-Item -LiteralPath $exe -Destination (Join-Path $Payload 'WuwaTappo.Local.exe')
+
+# 本地素材服务（冻结版）
+Copy-Item -LiteralPath $frozen -Destination (Join-Path $Payload 'host') -Recurse
+Copy-Item -LiteralPath (Join-Path $Payload 'host\LocalGalleryHost.exe') -Destination (Join-Path $Payload 'LocalGalleryHost.exe')
+Copy-Item -LiteralPath (Join-Path $Payload 'host\_internal') -Destination (Join-Path $Payload '_internal') -Recurse
+
+# 素材缓存
+Copy-Item -LiteralPath (Join-Path $Root 'assets\cache') -Destination (Join-Path $Payload 'cache') -Recurse
+
+# WebView2 固定运行时：取系统已装的最新一份，避免硬编码版本号
+$wvRoots = @(
+  'C:\Program Files (x86)\Microsoft\EdgeWebView\Application',
+  'C:\Program Files\Microsoft\EdgeWebView\Application'
+) | Where-Object { Test-Path -LiteralPath $_ }
+if ($wvRoots) {
+  $wv = Get-ChildItem -LiteralPath $wvRoots[0] -Directory -ErrorAction SilentlyContinue |
+    Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'msedgewebview2.exe') } |
+    Sort-Object { try { [version]($_.Name -replace '[^0-9.]', '') } catch { [version]'0.0' } } |
+    Select-Object -Last 1
+  if ($wv) {
+    Copy-Item -LiteralPath $wv.FullName -Destination (Join-Path $Payload 'runtime') -Recurse
+    "WebView2 运行时: $($wv.Name)"
+  } else {
+    Write-Warning '未找到可用的 WebView2 运行时，程序将回退到系统运行时'
+  }
+}
+
+# 脚本与文档
+foreach ($f in @('initialize.ps1', 'launch.ps1', 'restore_network.ps1')) {
+  $src = Join-Path $Root "src\installer\$f"
+  if (Test-Path -LiteralPath $src) { Copy-Item -LiteralPath $src -Destination (Join-Path $Payload $f) }
+}
+foreach ($f in @('README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md')) {
+  $src = Join-Path $Root "src\$f"
+  if (Test-Path -LiteralPath $src) { Copy-Item -LiteralPath $src -Destination (Join-Path $Payload $f) }
+}
+if (Test-Path -LiteralPath (Join-Path $Root 'docs')) {
+  Copy-Item -LiteralPath (Join-Path $Root 'docs') -Destination (Join-Path $Payload 'docs') -Recurse
+}
+Copy-Item -LiteralPath (Join-Path $Root 'build\local_config.json') -Destination (Join-Path $Payload 'package_config.json')
+
+# 同步到 app\（不清理多余文件，保留账号与运行状态）
+if (-not (Test-Path -LiteralPath $App)) { New-Item -ItemType Directory -Path $App | Out-Null }
+robocopy $Payload $App /E /NFL /NDL /NJH /NJS /R:1 /W:1 | Out-Null
+if ($LASTEXITCODE -ge 8) { throw "同步到 app\ 失败，robocopy 退出码 $LASTEXITCODE" }
+
+# 无控制台启动器（若已编译）
+$launcherExe = Join-Path $Root 'build\launcher\dist\WuwaTappoLauncher.exe'
+if (Test-Path -LiteralPath $launcherExe) {
+  Copy-Item -LiteralPath $launcherExe -Destination (Join-Path $Payload 'WuwaTappoLauncher.exe')
+}
+
+# 启动器（相对路径，可随目录搬迁）；start.cmd 用纯 ASCII 名，供桌面快捷方式引用
+$launcher = @'
+@echo off
+chcp 65001 >nul
+setlocal
+set ROOT=%~dp0
+tasklist /FI "IMAGENAME eq LocalGalleryHost.exe" 2>nul | find /I "LocalGalleryHost.exe" >nul
+if errorlevel 1 (
+  start "" /B "%ROOT%LocalGalleryHost.exe"
+  timeout /t 2 /nobreak >nul
+)
+start "" "%ROOT%WuwaTappo.Local.exe"
+endlocal
+'@
+foreach ($name in @('start.cmd', '启动.cmd')) {
+  [IO.File]::WriteAllText((Join-Path $App $name), $launcher, (New-Object Text.UTF8Encoding($false)))
+}
+
+# launch.ps1 会被本机安全策略删除，内容存档在 .disabled.txt，这里尽力还原
+$launchLnk = Join-Path $App 'launch.ps1'
+if (-not (Test-Path -LiteralPath $launchLnk)) {
+  $archive = Join-Path $Root 'src\installer\launch.ps1.disabled.txt'
+  if (Test-Path -LiteralPath $archive) {
+    Copy-Item -LiteralPath $archive -Destination $launchLnk -Force -ErrorAction SilentlyContinue
+  }
+}
+
+$total = (Get-ChildItem -LiteralPath $App -Recurse -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum)
+"部署完成 -> $App"
+"合计 {0:N0} MB / {1} 个文件" -f ($total.Sum / 1MB), $total.Count

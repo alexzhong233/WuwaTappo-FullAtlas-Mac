@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -82,7 +83,7 @@ test('failure reports select only the exact regional issue title', () => {
   assert.equal(exactIssueNumber(issues.slice(0, 2), '国服官方同步需要处理'), null);
 });
 
-test('update PR execution commits only its regional lock, selects draft after failure, and does nothing without a diff', async () => {
+test('update PR execution commits its regional lock plus the regenerated contract snapshot', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'wuwa-upstream-pr-'));
   const environment = { GITHUB_REPOSITORY: 'owner/repo', GITHUB_RUN_ID: '123', ...Object.fromEntries(['inventory', 'frontend', 'native', 'build', 'package'].map(stage => [`${stage.toUpperCase()}_OUTCOME`, 'success'])) };
   try {
@@ -100,11 +101,52 @@ test('update PR execution commits only its regional lock, selects draft after fa
         assert.deepEqual(calls, [['git', ['diff', '--', `upstream-${region}.json`]]]);
         continue;
       }
+      // 这个临时工程里没有官方前端，快照生成器无从下手，只应提交锁文件。
       assert.deepEqual(calls.find(([command, args]) => command === 'git' && args[0] === 'add'), ['git', ['add', '--', `upstream-${region}.json`]]);
       assert.deepEqual(calls.find(([command, args]) => command === 'git' && args[0] === 'push'), ['git', ['push', 'origin', `codex/official-${region}-1.0.2-123`]]);
       assert.equal(calls.at(-1)[0], 'gh');
       assert.equal(calls.at(-1)[1].includes('--draft'), frontend === 'failure');
     }
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('a stale contract snapshot is regenerated and staged without touching the hand-written network contract', async (t) => {
+  // 只有跑过 npm run setup 的机器才有官方前端；CI 两个区域都会先跑 setup。
+  const profile = getRegionProfile('global');
+  const assets = path.join(root, profile.frontendDir, 'assets');
+  if (!existsSync(assets)) return t.skip(`缺少 ${profile.frontendDir}，先跑 npm run setup`);
+  const filename = 'contracts-global.json';
+  const directory = await mkdtemp(path.join(tmpdir(), 'wuwa-upstream-snapshot-'));
+  try {
+    await mkdir(path.join(directory, '.work'));
+    await mkdir(path.join(directory, 'tests'));
+    await mkdir(path.join(directory, profile.frontendDir), { recursive: true });
+    await symlink(assets, path.join(directory, profile.frontendDir, 'assets'), 'dir');
+    await writeFile(path.join(directory, profile.upstreamLock), await readFile(path.join(root, profile.upstreamLock), 'utf8'));
+    await writeFile(path.join(directory, '.work/upstream-check.json'), '{"latestVersion":"1.0.4"}');
+    const accepted = await readFile(path.join(root, 'tests', filename), 'utf8');
+    const stale = accepted.replace(/"version": "[^"]+"/, '"version": "0.0.1"');
+    await writeFile(path.join(directory, 'tests', filename), stale);
+    const networkContract = await readFile(path.join(root, 'tests/network-contract-global.json'), 'utf8');
+    await writeFile(path.join(directory, 'tests/network-contract-global.json'), networkContract);
+    const calls = [];
+    const execute = (command, args, options) => {
+      assert.equal(options.cwd, directory);
+      calls.push([command, args]);
+      return command === 'git' && args[0] === 'diff' ? 'resource diff' : '';
+    };
+    await openUpdatePullRequest({ projectRoot: directory, profile, environment: { GITHUB_REPOSITORY: 'owner/repo', GITHUB_RUN_ID: '9', FRONTEND_OUTCOME: 'failure' }, execute });
+    const add = calls.find(([command, args]) => command === 'git' && args[0] === 'add');
+    assert.deepEqual(add, ['git', ['add', '--', 'upstream-global.json', `tests/${filename}`]]);
+    const regenerated = await readFile(path.join(directory, 'tests', filename), 'utf8');
+    assert.notEqual(regenerated, stale);
+    const lock = JSON.parse(await readFile(path.join(directory, profile.upstreamLock), 'utf8'));
+    assert.equal(JSON.parse(regenerated).sourceApplication.version, lock.version);
+    assert.equal(await readFile(path.join(directory, 'tests/network-contract-global.json'), 'utf8'), networkContract);
+    const body = calls.at(-1)[1][calls.at(-1)[1].indexOf('--body') + 1];
+    assert.ok(body.includes(`tests/${filename}`));
+    assert.ok(body.includes('手写约束'));
+    assert.ok(body.includes('旧契约快照'));
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 

@@ -436,6 +436,23 @@ export function inventoryAssets(assetDirectory, { version = '1.0.0' } = {}) {
   };
 }
 
+export function contractSnapshotPath(projectRoot, profile) {
+  return path.join(projectRoot, 'tests', profile.id === 'cn' ? 'contracts.json' : 'contracts-global.json');
+}
+
+// 契约快照是生成器产物：可以随时按当前官方前端重新生成，人工只负责判断"这次差异接不接受"。
+// 返回 null 表示没必要提交（前端或既有快照缺失，或生成结果与已提交内容完全一致）。
+export function writeContractSnapshot(projectRoot, profile, directory = path.join(projectRoot, profile.frontendDir, 'assets')) {
+  const destination = contractSnapshotPath(projectRoot, profile);
+  if (!fs.existsSync(directory) || !fs.existsSync(destination)) return null;
+  const { version } = JSON.parse(fs.readFileSync(path.join(projectRoot, profile.upstreamLock), 'utf8'));
+  const inventory = inventoryAssets(directory, { version });
+  const next = `${JSON.stringify(inventory, null, 2)}\n`;
+  if (fs.readFileSync(destination, 'utf8') === next) return null;
+  fs.writeFileSync(destination, next);
+  return { destination, inventory };
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const profile = getRegionProfile();
   const directory = process.argv[2] || new URL(`../${profile.frontendDir}/assets/`, import.meta.url).pathname;

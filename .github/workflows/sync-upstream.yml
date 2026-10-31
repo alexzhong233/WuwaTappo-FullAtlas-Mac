@@ -1,28 +1,52 @@
-name: Sync official CN FullAtlas
+name: Sync official upstream
 
 on:
   schedule:
     - cron: '17 2 * * *'
   workflow_dispatch:
+    inputs:
+      region:
+        description: '要检查的服务区域'
+        required: true
+        default: both
+        type: choice
+        options: [both, cn, global]
 
 permissions:
   contents: read
 
 concurrency:
-  group: sync-official-regions
+  group: sync-official-upstream
   cancel-in-progress: false
 
 jobs:
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.regions.outputs.matrix }}
+    steps:
+      - name: Select regions to check
+        id: regions
+        env:
+          TARGET: ${{ inputs.region || 'both' }}
+        run: |
+          case "$TARGET" in
+            cn) echo 'matrix={"include":[{"region":"cn","label":"国服"}]}' >> "$GITHUB_OUTPUT" ;;
+            global) echo 'matrix={"include":[{"region":"global","label":"国际服"}]}' >> "$GITHUB_OUTPUT" ;;
+            both) echo 'matrix={"include":[{"region":"cn","label":"国服"},{"region":"global","label":"国际服"}]}' >> "$GITHUB_OUTPUT" ;;
+            *) echo "未知服务区域：$TARGET" >&2; exit 2 ;;
+          esac
+
   sync:
     name: ${{ matrix.region }}
+    needs: plan
     runs-on: macos-15
     timeout-minutes: 45
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - region: cn
-            label: 国服
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     permissions:
       contents: write
       pull-requests: write

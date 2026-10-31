@@ -15,9 +15,17 @@ permissions:
 
 jobs:
   build:
-    name: windows-x64
+    name: windows-x64-${{ matrix.region }}
     runs-on: windows-2022
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - region: cn
+            artifact: WuwaTappo-Full-Community-Windows-x64
+          - region: global
+            artifact: WuwaTappo-Global-Community-Windows-x64
     steps:
       - uses: actions/checkout@v5
         with:
@@ -37,7 +45,8 @@ jobs:
         id: pinned
         shell: pwsh
         run: |
-          $lock = Get-Content windows/upstream-win.json -Raw | ConvertFrom-Json
+          $lockFile = if ('${{ matrix.region }}' -eq 'global') { 'windows/upstream-win-global.json' } else { 'windows/upstream-win.json' }
+          $lock = Get-Content $lockFile -Raw | ConvertFrom-Json
           "version=$($lock.client_version)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           $bytes = [Text.Encoding]::UTF8.GetBytes([string]$lock.installer_url)
           $sha = [Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
@@ -49,10 +58,11 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           # 只缓存安装包与解出的主程序；解包产物 app\ 不进缓存，避免几百 MB 冗余
+          # 两个区域各有一套基底目录：build（国服）/ build-global（国际服）
           path: |
-            windows/build/official/*/*setup.exe
-            windows/build/official/*/base/WuwaTappo.official.exe
-          key: windows-official-${{ steps.pinned.outputs.version }}-${{ steps.pinned.outputs.urlhash }}
+            windows/build${{ matrix.region == 'global' && '-global' || '' }}/official/*/*setup.exe
+            windows/build${{ matrix.region == 'global' && '-global' || '' }}/official/*/base/WuwaTappo.official.exe
+          key: windows-official-${{ matrix.region }}-${{ steps.pinned.outputs.version }}-${{ steps.pinned.outputs.urlhash }}
 
       - name: Build, patch and package
         shell: pwsh
@@ -61,24 +71,24 @@ jobs:
           # 产物体积从 ~700MB 降到 ~130MB
           WUWA_PYTHON: ${{ steps.python.outputs.python-path }}
         run: |
-          node scripts/build-platform.mjs --platform=win --package --no-runtime
+          node scripts/build-platform.mjs --platform=win --package --no-runtime --region=${{ matrix.region }}
 
       - name: Save pinned official installer
         if: steps.installer-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: windows/build/official
-          key: windows-official-${{ steps.pinned.outputs.version }}-${{ steps.pinned.outputs.urlhash }}
+          path: windows/build${{ matrix.region == 'global' && '-global' || '' }}/official
+          key: windows-official-${{ matrix.region }}-${{ steps.pinned.outputs.version }}-${{ steps.pinned.outputs.urlhash }}
 
       - name: Report artifact
         shell: pwsh
         run: |
-          Get-ChildItem dist -Filter *Windows* -ErrorAction SilentlyContinue |
+          Get-ChildItem dist -Filter '${{ matrix.artifact }}-*' -ErrorAction SilentlyContinue |
             Select-Object Name, @{n='MB';e={[math]::Round($_.Length/1MB,1)}} | Format-Table -AutoSize
 
       - uses: actions/upload-artifact@v4
         with:
-          name: WuwaTappo-Full-Community-Windows-x64
+          name: ${{ matrix.artifact }}
           path: |
             dist/*Windows-x64*.zip
             dist/*Windows-x64*.zip.sha256

@@ -28,10 +28,20 @@ for name in [shared_name, main_name, panel_name] + globals().get('extra_patched_
     data = bytearray(data.replace(old_hash, new_hash))
     asset_changes.append({'path': row['path'], 'rva': hex(asset_rva), 'compressed_size': len(packed), 'size': len(plain), 'sha256': hashlib.sha256(plain).hexdigest()})
 # A separate application identifier keeps the original process and profile intact.
-for old, new in [(b'com.kuro.wuwatappo.cn', b'com.kuro.wuwatappo.lc'), (b'wuwatappo.global', b'wuwatappo.localx')]:
-    assert len(old) == len(new)
-    assert data.count(old) > 0
+# 国服标识是 com.kuro.wuwatappo.cn，国际服是 com.kuro.wuwatappo.global：
+# 两侧只命中其中一个，所以按候选列表替换，命中过任意一项即可（否则进程隔离没生效）。
+identifiers = [(b'com.kuro.wuwatappo.cn', b'com.kuro.wuwatappo.lc'),
+               (b'com.kuro.wuwatappo.global', b'com.kuro.wuwatappo.localx'),
+               (b'wuwatappo.global', b'wuwatappo.localx')]
+renamed = 0
+for old, new in identifiers:
+    assert len(old) == len(new), (old, new)
+    hits = data.count(old)
+    if hits == 0: continue
+    if not old.startswith(b'wuwatappo.global'):
+        renamed += hits
     data = bytearray(data.replace(old, new))
+assert renamed > 0, '未找到可用于进程隔离的应用标识符'
 # Keep the variant's single-instance mutex and message window separate too.
 # Change only the exact Rust formatting literals, not menu permission strings
 # containing the word "simple".

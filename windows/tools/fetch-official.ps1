@@ -22,6 +22,8 @@
 #>
 param(
   [string]$Version,
+  [ValidateSet('cn', 'global')]
+  [string]$Region,
   [string]$Installer,
   [string]$OfficialExe,
   [switch]$Latest,
@@ -30,8 +32,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path $PSScriptRoot -Parent
-$AssetsHost = 'https://mc-wuwatappo.kurogames-global.com'
-$LockFile = Join-Path $Root 'upstream-win.json'
+. (Join-Path $PSScriptRoot 'region.ps1')
+$R = Get-RegionProfile -Root $Root -Region $Region
+$LockFile = $R.LockFile
 
 function Get-Json([string]$url) {
   try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
@@ -43,7 +46,7 @@ function Get-Json([string]$url) {
 }
 
 function Get-RemoteManifest {
-  $hostJson = Get-Json "$AssetsHost/app/json-host/latest_host.json"
+  $hostJson = Get-Json "$($R.AssetsHost)/app/json-host/$($R.UpdaterHostFile)"
   if (-not $hostJson.url) { throw 'latest_host.json 未返回 url 字段' }
   # 必须用清单返回的带 ?t= 的地址，直连 version-json 会命中 CDN 缓存拿到旧版本
   return Get-Json ([string]$hostJson.url)
@@ -168,7 +171,7 @@ $lockedVersion = if ($lock) { [string]$lock.client_version } else { '' }
 if ($OfficialExe) {
   if (-not (Test-Path -LiteralPath $OfficialExe)) { throw "指定的主程序不存在: $OfficialExe" }
   $target = if ($Version) { $Version } elseif ($lockedVersion) { $lockedVersion } else { 'custom' }
-  $work = Join-Path $Root "build\official\$target"
+  $work = Join-Path $R.WorkDir "official\$target"
   New-Item -ItemType Directory -Path $work -Force | Out-Null
   "== 1/2 使用已有主程序 =="
   "来源: $((Resolve-Path -LiteralPath $OfficialExe).Path)"
@@ -200,7 +203,7 @@ if ($OfficialExe) {
     }
     "地址    : $url"
 
-    $work = Join-Path $Root "build\official\$target"
+    $work = Join-Path $R.WorkDir "official\$target"
     New-Item -ItemType Directory -Path $work -Force | Out-Null
     $setup = Join-Path $work (Split-Path $url -Leaf)
     if ((Test-Path -LiteralPath $setup) -and -not $Force) {
@@ -217,7 +220,7 @@ if ($OfficialExe) {
     if (-not (Test-Path -LiteralPath $Installer)) { throw "安装包不存在: $Installer" }
     $target = if ($Version) { $Version } elseif ($lockedVersion) { $lockedVersion } else { 'custom' }
     $setup = (Resolve-Path -LiteralPath $Installer).Path
-    $work = Join-Path $Root "build\official\$target"
+    $work = Join-Path $R.WorkDir "official\$target"
     New-Item -ItemType Directory -Path $work -Force | Out-Null
     "使用指定安装包: $setup"
   }
@@ -317,7 +320,7 @@ $info = [ordered]@{
   hash_matched = $match
   fetched_at   = (Get-Date).ToString('s')
 }
-$outFile = Join-Path $Root 'build\official\current.json'
+$outFile = Join-Path $R.WorkDir 'official\current.json'
 New-Item -ItemType Directory -Path (Split-Path $outFile -Parent) -Force | Out-Null
 # 不能带 BOM：Node 侧 JSON.parse 会把 \ufeff 当非法字符
 [IO.File]::WriteAllText($outFile, ($info | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))

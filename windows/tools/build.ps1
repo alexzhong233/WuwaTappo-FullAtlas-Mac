@@ -12,11 +12,15 @@
         -NoRuntime 装配时不内嵌 WebView2 运行时（CI / 小体积产物用）
         -Base      指定官方主程序所在基底目录（默认为 build\base-103）
 #>
-param([switch]$Extract, [switch]$NoDeploy, [switch]$NoRuntime, [string]$Base)
+param([switch]$Extract, [switch]$NoDeploy, [switch]$NoRuntime, [string]$Base,
+  [ValidateSet('cn', 'global')][string]$Region)
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path $PSScriptRoot -Parent
+. (Join-Path $PSScriptRoot 'region.ps1')
+$R = Get-RegionProfile -Root $Root -Region $Region
+$env:WUWA_REGION = $R.Id
 $Py = Join-Path $Root '.venv\Scripts\python.exe'
-if (-not $Base) { $Base = Join-Path $Root 'build\base-103' }
+if (-not $Base) { $Base = Join-Path $R.WorkDir 'base-103' }
 $Official = Join-Path $Base 'WuwaTappo.official.exe'
 $Patched = Join-Path $Root 'src'
 
@@ -46,8 +50,8 @@ if ($Extract) {
   if ($LASTEXITCODE -ne 0) { throw '生成 js_structure.json 失败' }
 }
 
-"== 2/4 注入全图鉴控制器 =="
-$env:WUWA_BUILD_ROOT = (Join-Path $Root 'build')
+"== 2/4 注入全图鉴控制器（$($R.Label)） =="
+$env:WUWA_BUILD_ROOT = $R.WorkDir
 $env:WUWA_EXTRACT_ROOT = $Base
 
 # build_integration.py 与运行期都要读 build\local_config.json，之前它靠上游 build.py 生成，
@@ -78,7 +82,7 @@ if (Test-Path -LiteralPath $buildPy) {
 }
 
 # 前端用 token 给本机 HTTP 请求签名，必须存在。已生成的沿用，避免每次构建换掉已部署实例的凭据
-$configPath = Join-Path $Root 'build\local_config.json'
+$configPath = Join-Path $R.WorkDir 'local_config.json'
 $token = ''
 if (Test-Path -LiteralPath $configPath) {
   $previous = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -94,6 +98,11 @@ if (-not $token) {
 $config = [ordered]@{
   token          = $token
   port           = 43229
+  region         = $R.Id
+  label          = $R.Label
+  # 运行期拉素材与图鉴走本区域的官方源；换区域不能沿用国服域名
+  cdn_host       = $R.AssetsHost
+  api_base       = $R.ApiBase
   asset_count    = $assetCount
   atlas_count    = $atlasCount
   client_version = $clientVersion
@@ -105,19 +114,19 @@ $config = [ordered]@{
 
 # build_integration.py 从 build\current_base.txt 读基底路径，必须随 -Base 同步，
 # 否则换了基底仍会指向旧目录（无 BOM，避免 read_text 读出 \ufeff）
-[IO.File]::WriteAllText((Join-Path $Root 'build\current_base.txt'), $Base,
+[IO.File]::WriteAllText((Join-Path $R.WorkDir 'current_base.txt'), $Base,
   (New-Object Text.UTF8Encoding($false)))
-if (Test-Path -LiteralPath (Join-Path $Root 'build\frontend_v2')) {
-  Remove-Item -LiteralPath (Join-Path $Root 'build\frontend_v2') -Recurse -Force
+if (Test-Path -LiteralPath (Join-Path $R.WorkDir 'frontend_v2')) {
+  Remove-Item -LiteralPath (Join-Path $R.WorkDir 'frontend_v2') -Recurse -Force
 }
 & $Py (Join-Path $Patched 'tools\build_integration.py')
 if ($LASTEXITCODE -ne 0) { throw "注入失败" }
 
 "== 3/4 冻结本地素材服务 =="
 & $Py -m PyInstaller --noconfirm --clean --onedir --console --name LocalGalleryHost `
-  --distpath (Join-Path $Root 'build\frozen') `
-  --workpath (Join-Path $Root 'build\pyinstaller') `
-  --specpath (Join-Path $Root 'build') `
+  --distpath (Join-Path $R.WorkDir 'frozen') `
+  --workpath (Join-Path $R.WorkDir 'pyinstaller') `
+  --specpath $R.WorkDir `
   --paths (Join-Path $Patched 'src') `
   (Join-Path $Patched 'src\local_host.py')
 if ($LASTEXITCODE -ne 0) { throw "冻结失败" }
@@ -129,5 +138,5 @@ if ($NoDeploy) {
 }
 
 "== 4/4 装配并同步到 app\ =="
-if ($NoRuntime) { & (Join-Path $PSScriptRoot 'deploy.ps1') -NoRuntime }
-else { & (Join-Path $PSScriptRoot 'deploy.ps1') }
+if ($NoRuntime) { & (Join-Path $PSScriptRoot 'deploy.ps1') -Region $R.Id -NoRuntime }
+else { & (Join-Path $PSScriptRoot 'deploy.ps1') -Region $R.Id }

@@ -8,15 +8,22 @@ def get_json(url):
     with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'WuwaTappo-LocalGallery-Cache'}), timeout=30) as response:
         return json.load(response)
 
-def sync(root, progress):
+def sync(root, progress, api=None, allowed_hosts=None):
+    # 国服与国际服的图鉴/素材是两个官方源，域名与内容都可能不同。
+    # 由调用方（local_host 读 local_config.json）传入，缺省仍走国服。
+    api = (api or API).rstrip('/')
+    allowed = set()
+    for item in [api] + list(allowed_hosts or []):
+        parsed = urllib.parse.urlparse(item)
+        allowed.add(parsed.hostname or item)
     root = Path(root)
     cache = root / 'cache'
-    activity = get_json(API + '/api/common/activity-config')
-    atlas = get_json(API + '/api/common/atlas')
+    activity = get_json(api + '/api/common/activity-config')
+    atlas = get_json(api + '/api/common/atlas')
     if activity.get('code') != 0 or atlas.get('code') != 0 or not isinstance(atlas.get('data'), list) or not atlas['data']:
         raise ValueError('官方目录响应格式异常，保留原缓存')
     host = activity['data']['assets_host'].rstrip('/')
-    if urllib.parse.urlparse(host).hostname not in ['mc-wuwatappo.kurogames-global.com']:
+    if urllib.parse.urlparse(host).hostname not in allowed:
         raise ValueError('未识别的素材域名，保留原缓存')
     old_atlas = json.loads((cache / 'atlas.json').read_text(encoding='utf-8'))
     old_activity = json.loads((cache / 'activity-config.json').read_text(encoding='utf-8'))

@@ -17,6 +17,26 @@
 - 入口 `WuwaTappoLauncher.exe`：无控制台窗口，自动提权（主程序清单是 `requireAdministrator`）。
 - 官方自动更新**永久关闭**（`isAppUpdaterEnabled()` 返回 false）：改过的 exe 过不了官方 minisign 签名，走 OTA 会把补丁覆盖掉。
 
+## 国服 / 国际服
+
+两条构建链完全一致，只是数据源与目录不同。区域默认 `cn`，`--region=global` 切国际服：
+
+| | 国服（默认） | 国际服 |
+| --- | --- | --- |
+| 锁定文件 | `upstream-win.json` | `upstream-win-global.json` |
+| 素材 / 接口 | `mc-wuwatappo.kurogames-global.com` | `wutheringwaves-wuwatappo.kurogames-global.com` |
+| 基底 | `build\official\` | `build-global\official\` |
+| 构建 / 装配 | `build\`、`app\` | `build-global\`、`app-global\` |
+| 产物 | `WuwaTappo-Full-Community-Windows-x64-<ver>.zip` | `WuwaTappo-Global-Community-Windows-x64-<ver>.zip` |
+
+```powershell
+node scripts/build-platform.mjs --platform=win --region=global --package --no-runtime
+```
+
+区域会写进 `local_config.json` 的 `region` / `cdn_host` / `api_base`，运行期拉素材和图鉴走本区域的官方源；老配置没有这几个字段时退回国服，既有部署不受影响。
+
+两侧基底同版本（1.0.3）但哈希不同，注入脚本按候选兼容两处差异：国际服前端把 `listen` 压成 `listen$1`、应用标识是 `com.kuro.wuwatappo.global`（国服是 `com.kuro.wuwatappo.cn`）。不维护两套锚点。
+
 ## 从零构建
 
 需要 Windows 10/11 x64、Python 3.13、PowerShell 5.1、Node 18+。

@@ -14,12 +14,15 @@ param(
   [string]$Source,
   [string]$OutDir,
   [switch]$NoRuntime,
-  [switch]$KeepStaging
+  [switch]$KeepStaging,
+  [ValidateSet('cn', 'global')][string]$Region
 )
 
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path $PSScriptRoot -Parent
 $RepoRoot = Split-Path $Root -Parent
+. (Join-Path $PSScriptRoot 'region.ps1')
+$R = Get-RegionProfile -Root $Root -Region $Region
 
 # 不依赖 Get-FileHash：从 pwsh 7 环境启动 PS 5.1 时该 cmdlet 可能加载不到
 function Get-Sha256Hex([string]$path) {
@@ -29,11 +32,11 @@ function Get-Sha256Hex([string]$path) {
   return (($bytes | ForEach-Object { $_.ToString('x2') }) -join '')
 }
 
-if (-not $Source) { $Source = Join-Path $Root 'app' }
+if (-not $Source) { $Source = $R.AppDir }
 if (-not $OutDir) { $OutDir = Join-Path $RepoRoot 'dist' }
 
 $version = (Get-Content -LiteralPath (Join-Path $RepoRoot 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json).version
-$name = "WuwaTappo-Full-Community-Windows-x64-$version"
+$name = "$($R.ArtifactPrefix)-Windows-x64-$version"
 $zip = Join-Path $OutDir "$name.zip"
 
 if (-not (Test-Path -LiteralPath $Source)) { throw "找不到待打包目录：$Source（先跑 build.ps1 / deploy.ps1）" }
@@ -44,7 +47,7 @@ New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
 if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
 
 # 运行时目录单独控制：CI 默认不内嵌，压缩体积从 ~700MB 降到 ~120MB
-$staging = Join-Path $Root 'build\package-staging'
+$staging = Join-Path $R.WorkDir 'package-staging'
 if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
 New-Item -ItemType Directory -Path $staging -Force | Out-Null
 
@@ -69,6 +72,11 @@ $sevenZip = @(
   'C:\Program Files\7-Zip\7z.exe',
   'C:\Program Files (x86)\7-Zip\7z.exe'
 ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+# 与 fetch-official 一致：装在 PATH 上的 7z 也认，否则本地会静默退到 Compress-Archive
+if (-not $sevenZip) {
+  $cmd = Get-Command 7z -ErrorAction SilentlyContinue
+  if ($cmd) { $sevenZip = $cmd.Source }
+}
 
 if ($sevenZip) {
   Write-Host "== 打包（7z）=="

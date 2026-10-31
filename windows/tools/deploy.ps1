@@ -8,16 +8,19 @@
         -NoRuntime  不内嵌 WebView2 运行时（CI / 小体积产物用，回退系统运行时）
         -NoAssets   不复制 assets\cache（缺素材缓存时程序按需回源官方 CDN）
 #>
-param([string]$Target, [switch]$NoRuntime, [switch]$NoAssets)
+param([string]$Target, [switch]$NoRuntime, [switch]$NoAssets,
+  [ValidateSet('cn', 'global')][string]$Region)
 
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path $PSScriptRoot -Parent
-$App = if ($Target) { $Target } else { Join-Path $Root 'app' }
-$Payload = Join-Path $Root 'build\payload'
+. (Join-Path $PSScriptRoot 'region.ps1')
+$R = Get-RegionProfile -Root $Root -Region $Region
+$App = if ($Target) { $Target } else { $R.AppDir }
+$Payload = Join-Path $R.WorkDir 'payload'
 
-$exe = Join-Path $Root 'build\WuwaTappo.Local.v2.exe'
+$exe = Join-Path $R.WorkDir 'WuwaTappo.Local.v2.exe'
 if (-not (Test-Path -LiteralPath $exe)) { throw "缺少构建产物：$exe（先跑 tools\build.ps1）" }
-$frozen = Join-Path $Root 'build\frozen\LocalGalleryHost'
+$frozen = Join-Path $R.WorkDir 'frozen\LocalGalleryHost'
 if (-not (Test-Path -LiteralPath $frozen)) { throw "缺少冻结服务：$frozen" }
 
 if (Test-Path -LiteralPath $Payload) { Remove-Item -LiteralPath $Payload -Recurse -Force }
@@ -69,12 +72,12 @@ foreach ($f in @('README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md')) {
 if (Test-Path -LiteralPath (Join-Path $Root 'docs')) {
   Copy-Item -LiteralPath (Join-Path $Root 'docs') -Destination (Join-Path $Payload 'docs') -Recurse
 }
-Copy-Item -LiteralPath (Join-Path $Root 'build\local_config.json') -Destination (Join-Path $Payload 'package_config.json')
+Copy-Item -LiteralPath (Join-Path $R.WorkDir 'local_config.json') -Destination (Join-Path $Payload 'package_config.json')
 # 运行期必需（含 token）；robocopy 会跳过它，保留目标目录里已有的 token 与计数
-Copy-Item -LiteralPath (Join-Path $Root 'build\local_config.json') -Destination (Join-Path $Payload 'local_config.json')
+Copy-Item -LiteralPath (Join-Path $R.WorkDir 'local_config.json') -Destination (Join-Path $Payload 'local_config.json')
 
 # 无控制台启动器（若已编译）——必须在 robocopy 之前放进 payload，否则同步不到 app\
-$launcherExe = Join-Path $Root 'build\launcher\dist\WuwaTappoLauncher.exe'
+$launcherExe = Join-Path $R.WorkDir 'launcher\dist\WuwaTappoLauncher.exe'
 if (Test-Path -LiteralPath $launcherExe) {
   Copy-Item -LiteralPath $launcherExe -Destination (Join-Path $Payload 'WuwaTappoLauncher.exe')
 }

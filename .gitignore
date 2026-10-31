@@ -28,6 +28,9 @@
 # Windows 侧产物与缓存（源码在 windows/，构建产物不入库）
 /windows/app/
 /windows/build/
+# 国际服一套独立目录，结构相同
+/windows/app-global/
+/windows/build-global/
 /windows/.venv/
 /windows/assets/
 /windows/runtime/

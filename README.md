@@ -62,7 +62,7 @@ Windows 侧版本由 `windows/upstream-win.json` 锁定，不会因为官方发�
 
 | 项目 | 当前状态 |
 | --- | --- |
-| 服务区域 | 国服；国际服代码保留自上游，未整合 FullAtlas，不作为本项目发行目标 |
+| 服务区域 | 国服与国际服都构建：两侧各自锁定官方 1.0.3 基底，产物名带 `Full-Community` / `Global-Community` |
 | 系统 | macOS：Apple Silicon（M 系列），macOS 13 及以上；Windows：10/11 x64 |
 | 整合版本 | 1.2.2-alpha.1 实验版，基于官方国服 1.0.3 与 FullAtlas v1.2 |
 | 分支 | `main` 为 1.0.3 基底，两个平台同仓共用；`dev` 用于开发版；`official-1.0.3` 保留为历史适配分支 |
@@ -134,7 +134,7 @@ npm run package
 - 应用内的「更新本地图鉴」刷新目录数据，不升级程序或接口适配器。
 - `.github/workflows/sync-upstream.yml` 每日 **10:17（北京时间）** 检查国服更新。经静态提取、接口差异、测试、构建与打包验证后创建更新 PR；不兼容候选保持草稿，不自动合并。
 - FullAtlas 集成器同时核对官方版本和安装包摘要。未知版本不会只靠修改版本号进入正式构建。
-- `main` 和 `dev` 的 CI 都构建国服整合版。`dev` 的 CI 成功后会自动创建或更新 `dev` 滚动预发布版；版本标签触发的 Release 工作流只生成**草稿预发布**，需要维护者验收后手动发布.
+- `main` 和 `dev` 的 CI 按区域矩阵构建：macOS（`cn` / `global`）与 Windows（`cn` / `global`）各出一份产物。`dev` 的 CI 成功后会自动创建或更新 `dev` 滚动预发布版；版本标签触发的 Release 工作流只生成**草稿预发布**，需要维护者验收后手动发布.
 
 在你的仓库启用 Actions 后这些工作流才会运行。定时同步需要在仓库设置中允许 Actions 创建 Pull Request，首次发布步骤见 [GitHub 发布指南](macos/docs/PUBLISHING.md)。[官方更新流水线](macos/docs/OFFICIAL_UPDATE_PIPELINE.md) 和 [来源与更新记录](macos/docs/official-update-status-2026-10-30.md) 保留实现边界与核验信息。
 

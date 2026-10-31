@@ -43,6 +43,12 @@ const checkOnly = has('check');
 const wantPackage = has('package');
 const latest = has('latest');
 const noRuntime = has('no-runtime');
+// 区域：国服 cn / 国际服 global。Windows 侧靠 -Region 分派到两套锁与产物目录，
+// macOS 侧沿用 WUWA_REGION 环境变量，所以这里统一写回 env，platform=all 时两边一致。
+const region = String(value('region') ?? process.env.WUWA_REGION ?? 'cn').toLowerCase();
+if (!['cn', 'global'].includes(region)) throw new Error(`未知区域：${region}（可选 cn / global）`);
+process.env.WUWA_REGION = region;
+const winBuildDir = region === 'global' ? 'build-global' : 'build';
 
 const log = (...args) => console.log(...args);
 const section = title => console.log(`\n=== ${title} ===`);
@@ -101,16 +107,18 @@ function checkWin() {
   rows.push(['Python', py ?? '未找到', Boolean(py)]);
   const venv = join(WINDOWS, '.venv', 'Scripts', 'python.exe');
   rows.push(['windows\\.venv', existsSync(venv) ? '已就绪' : '未创建（setup-env.ps1 会自动建）', true]);
-  const lockPath = join(WINDOWS, 'upstream-win.json');
+  const lockName = region === 'global' ? 'upstream-win-global.json' : 'upstream-win.json';
+  const lockPath = join(WINDOWS, lockName);
+  rows.push(['区域', region === 'global' ? '国际服（global）' : '国服（cn）', true]);
   if (existsSync(lockPath)) {
     const lock = readJson(lockPath);
     rows.push(['适配基底（锁）', lock.client_version, true]);
     rows.push(['安装包直链', lock.installer_url ? '已配置' : '缺失', Boolean(lock.installer_url)]);
   } else {
-    rows.push(['upstream-win.json', '缺失', false]);
+    rows.push([lockName, '缺失', false]);
   }
   // 构建产物依赖：官方基底是否已解出（没有也可以由 fetch-official.ps1 现取）
-  const base = join(WINDOWS, 'build', 'official', 'current.json');
+  const base = join(WINDOWS, winBuildDir, 'official', 'current.json');
   if (existsSync(base)) {
     const info = readJson(base);
     rows.push(['已解基底', `${info.version}（${Math.round(info.size / 1048576)} MB）`, true]);
@@ -156,7 +164,8 @@ function buildWin({ withPackage }) {
   if (!ps) throw new Error('Windows 构建只能在 Windows 上执行');
 
   const call = (script, args = []) =>
-    run(ps, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', join(WINDOWS, 'tools', script), ...args]);
+    run(ps, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', join(WINDOWS, 'tools', script), '-Region', region, ...args]);
+  log(`区域：${region === 'global' ? '国际服' : '国服'}`);
 
   if (!existsSync(join(WINDOWS, '.venv', 'Scripts', 'python.exe'))) {
     section('准备 Python 环境');
@@ -166,7 +175,7 @@ function buildWin({ withPackage }) {
   section('获取官方基底');
   call('fetch-official.ps1', latest ? ['-Latest'] : []);
 
-  const infoPath = join(WINDOWS, 'build', 'official', 'current.json');
+  const infoPath = join(WINDOWS, winBuildDir, 'official', 'current.json');
   if (!existsSync(infoPath)) throw new Error('fetch-official.ps1 未产出 build\\official\\current.json');
   const info = readJson(infoPath);
   if (info.hash_matched === false) {

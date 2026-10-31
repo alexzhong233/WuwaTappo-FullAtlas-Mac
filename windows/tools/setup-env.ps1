@@ -39,8 +39,13 @@ $verText = (& $Python --version 2>&1) -join ' '
 "Python: $Python"
 "版本  : $verText"
 
-if ($verText -match '3\.1[45]') {
-  Write-Warning "PyInstaller 6.16 对 $verText 支持不稳，建议 3.13。冻结失败时换解释器并加 -Force 重跑。"
+# 按版本号判断，别用 '3\.1[45]' 这种子串匹配：'Python 3.13.14' 里就含 '3.14'
+if ($verText -match 'Python\s+(\d+)\.(\d+)\.') {
+  $major = [int]$Matches[1]
+  $minor = [int]$Matches[2]
+  if ($major -ne 3 -or $minor -gt 13) {
+    Write-Warning "PyInstaller 6.16 对 $verText 支持不稳，建议 3.13。冻结失败时换解释器并加 -Force 重跑。"
+  }
 }
 
 if ($Force -and (Test-Path -LiteralPath $Venv)) {

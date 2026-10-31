@@ -9,6 +9,20 @@ def integrate(project, base, frontend, structure, shared, main, panel, main_name
 
     mi = structure['files'][main_name]['imports']
     pi = structure['files'][panel_name]['imports']
+
+    def with_alias(imports, canonical):
+        # 压缩产物的本地名带不带 $1 后缀取决于该次构建：国服 1.0.3 是 listen，
+        # 国际服 1.0.3 是 listen$1。两种都认，避免为同一版本维护两份锚点。
+        if canonical in imports:
+            return imports
+        alternate = canonical + '$1'
+        if alternate in imports:
+            return dict(imports, **{canonical: imports[alternate]})
+        return imports
+
+    for name in ('listen', 'invoke', 'watch', 'onMounted', 'onUnmounted'):
+        mi = with_alias(mi, name)
+        pi = with_alias(pi, name)
     # 1.0.2 shipped a local `invoke$1` wrapper; 1.0.3 imports the tauri `invoke` directly.
     if 'invoke$1' not in mi and 'invoke' in mi:
         mi = dict(mi, **{'invoke$1': mi['invoke']})

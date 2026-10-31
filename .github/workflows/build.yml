@@ -23,6 +23,8 @@ jobs:
         include:
           - region: cn
             artifact: Full-Community
+          - region: global
+            artifact: Global-Community
     env:
       WUWA_REGION: ${{ matrix.region }}
       WUWA_INSTALLER_MIRROR_BASE: ${{ github.server_url }}/${{ github.repository }}/releases/download/upstream-resources

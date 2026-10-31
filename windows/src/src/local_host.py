@@ -44,7 +44,11 @@ def monitor_releases():
 ASSISTANT.update_required = False
 threading.Thread(target=monitor_releases, daemon=True).start()
 STATE = ROOT / 'offline_state.json'
-CDN_HOST = 'https://mc-wuwatappo.kurogames-global.com'
+# 素材与更新清单的官方源由构建区域决定（build.ps1 写进 local_config.json）。
+# 老配置没有这两个字段时退回国服，既有部署照常工作。
+CDN_HOST = (CONFIG.get('cdn_host') or 'https://mc-wuwatappo.kurogames-global.com').rstrip('/')
+API_BASE = (CONFIG.get('api_base') or 'https://api-mc-wuwatappo.kurogames-global.com').rstrip('/')
+UPDATER_HOST_FILE = 'latest-global_host.json' if CONFIG.get('region') == 'global' else 'latest_host.json'
 OFFICIAL_STATE = ROOT / 'official_update.json'
 _NAME_INDEX = None
 
@@ -69,7 +73,7 @@ def check_official():
     result = {'local': local, 'remote': '', 'newer': False, 'url': '', 'pub': '',
               'checked_at': int(time.time()), 'error': '', 'message': ''}
     try:
-        entry = _http_json(CDN_HOST + '/app/json-host/latest_host.json')
+        entry = _http_json(CDN_HOST + '/app/json-host/' + UPDATER_HOST_FILE)
         # 必须用清单里带 ?t= 的地址，否则命中 CDN 旧缓存
         manifest = _http_json(str(entry.get('url') or ''))
         remote = str(manifest.get('version') or '')
@@ -197,7 +201,7 @@ def start_sync(force=False):
         try:
             def progress(done, total):
                 SYNC.update(done=done, total=total)
-            result = sync_public_cache(ROOT, progress)
+            result = sync_public_cache(ROOT, progress, api=API_BASE, allowed_hosts=[CDN_HOST])
             with LOCK:
                 CONFIG.update(asset_count=result['asset_count'], atlas_count=result['atlas_count'])
                 (ROOT / 'local_config.json').write_text(json.dumps(CONFIG, indent=2), encoding='utf-8')

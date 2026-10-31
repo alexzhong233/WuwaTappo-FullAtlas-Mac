@@ -6,12 +6,13 @@
     2. 官方 1.0.3 主程序放到 build\base-103\WuwaTappo.official.exe
     3. assets\cache 已由 prepare_cache.py 拉好
 
-  用法： powershell -ExecutionPolicy Bypass -File tools\build.ps1 [-Extract] [-NoDeploy] [-Base <目录>]
+  用法： powershell -ExecutionPolicy Bypass -File tools\build.ps1 [-Extract] [-NoDeploy] [-NoRuntime] [-Base <目录>]
         -Extract   先重新解包官方 EXE（覆盖 build\base-103 的前端产物）
         -NoDeploy  只构建到 build\，不自动同步到 app\（更新流程用，先装配到中转目录再整体覆盖）
+        -NoRuntime 装配时不内嵌 WebView2 运行时（CI / 小体积产物用）
         -Base      指定官方主程序所在基底目录（默认为 build\base-103）
 #>
-param([switch]$Extract, [switch]$NoDeploy, [string]$Base)
+param([switch]$Extract, [switch]$NoDeploy, [switch]$NoRuntime, [string]$Base)
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path $PSScriptRoot -Parent
 $Py = Join-Path $Root '.venv\Scripts\python.exe'
@@ -28,11 +29,65 @@ if ($Extract) {
   $env:WUWA_EXTRACT_ROOT = $Base
   & $Py (Join-Path $Patched 'tools\extract_static.py') $Official
   if ($LASTEXITCODE -ne 0) { throw "解包失败" }
+
+  # 注入脚本依赖 js_structure.json（共享 JS 里各模块的位置与压缩变量名），
+  # 这个文件由 inspect_js.cjs 从解包产物里分析得出，extract_static.py 不产出。
+  "== 1.5/4 定位 JS 结构 =="
+  $readable = Join-Path $Base 'readable_js\assets'
+  if (-not (Test-Path -LiteralPath $readable)) { throw "解包后缺少 readable_js\assets：$readable" }
+  $shared = Get-ChildItem -LiteralPath $readable -Filter *.js |
+    Where-Object { Select-String -LiteralPath $_.FullName -Pattern 'function applyCatalog(' -SimpleMatch -Quiet } |
+    Select-Object -First 1
+  if (-not $shared) { throw '未找到含 applyCatalog 的共享 JS，无法定位注入锚点' }
+  "共享 JS: $($shared.Name)"
+  $nodeExe = (Get-Command node -ErrorAction SilentlyContinue).Source
+  if (-not $nodeExe) { throw '需要 Node 生成 js_structure.json，请确认 node 在 PATH 上' }
+  & $nodeExe (Join-Path $Patched 'tools\inspect_js.cjs') $Base $shared.Name
+  if ($LASTEXITCODE -ne 0) { throw '生成 js_structure.json 失败' }
 }
 
 "== 2/4 注入全图鉴控制器 =="
 $env:WUWA_BUILD_ROOT = (Join-Path $Root 'build')
 $env:WUWA_EXTRACT_ROOT = $Base
+
+# build_integration.py 与运行期都要读 build\local_config.json，之前它靠上游 build.py 生成，
+# 现在这一步由本脚本负责。素材缓存缺失时计数为 0，程序仍可启动，图鉴按需回源官方 CDN。
+$cacheDir = Join-Path $Root 'assets\cache'
+$assetCount = 0
+$atlasCount = 0
+$manifestPath = Join-Path $cacheDir 'asset_manifest.json'
+if (Test-Path -LiteralPath $manifestPath) {
+  $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+  $assetCount = @($manifest.records).Count
+}
+$atlasPath = Join-Path $cacheDir 'atlas.json'
+if (Test-Path -LiteralPath $atlasPath) {
+  $atlas = Get-Content -LiteralPath $atlasPath -Raw -Encoding UTF8 | ConvertFrom-Json
+  $atlasCount = @($atlas.data).Count
+}
+if ($assetCount -eq 0) { Write-Warning '未找到素材缓存（assets\cache），产物不含离线图鉴' }
+
+$clientVersion = (Get-Item -LiteralPath $Official).VersionInfo.ProductVersion
+if (-not $clientVersion) { $clientVersion = '0.0.0' }
+# 整合版本沿用注入源码里声明的值，避免面板显示与实际补丁版本不一致
+$modVersion = '1.2'
+$buildPy = Join-Path $Patched 'build.py'
+if (Test-Path -LiteralPath $buildPy) {
+  $hit = Select-String -LiteralPath $buildPy -Pattern "MOD_VERSION\s*=\s*'([^']+)'" | Select-Object -First 1
+  if ($hit) { $modVersion = $hit.Matches[0].Groups[1].Value }
+}
+
+$config = [ordered]@{
+  port           = 43229
+  asset_count    = $assetCount
+  atlas_count    = $atlasCount
+  client_version = $clientVersion
+  mod_version    = $modVersion
+}
+[IO.File]::WriteAllText((Join-Path $Root 'build\local_config.json'),
+  ($config | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))
+"基底版本 $clientVersion / 整合 $modVersion / 素材 $assetCount 张 / 图鉴 $atlasCount 条"
+
 # build_integration.py 从 build\current_base.txt 读基底路径，必须随 -Base 同步，
 # 否则换了基底仍会指向旧目录（无 BOM，避免 read_text 读出 \ufeff）
 [IO.File]::WriteAllText((Join-Path $Root 'build\current_base.txt'), $Base,
@@ -59,4 +114,5 @@ if ($NoDeploy) {
 }
 
 "== 4/4 装配并同步到 app\ =="
-& (Join-Path $PSScriptRoot 'deploy.ps1')
+if ($NoRuntime) { & (Join-Path $PSScriptRoot 'deploy.ps1') -NoRuntime }
+else { & (Join-Path $PSScriptRoot 'deploy.ps1') }

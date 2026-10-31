@@ -1,0 +1,8 @@
+{
+  "$comment": "Windows 侧注入适配所锁定的官方客户端版本。CI 与 fetch-official.ps1 默认按这里的版本取包，保证可重现；官方发新版后不会让 main 的构建静默变成未适配版本。",
+  "client_version": "1.0.3",
+  "official_exe_sha256": "cedc37d0c11d112f4d933647fb6cf00e1dca847fc763250984c647080f849080",
+  "official_exe_size": 78064864,
+  "installer_url": "https://mc-wuwatappo.kurogames-global.com/app/0ad48bb0-55bf-49f0-b57d-2b9f3edc0c73/WuwaTappo-cn_1.0.3_x64-setup.exe",
+  "adapter_notes": "1.0.3 的 6 处注入断点处理见 tools/patches/1.0.3-adaptation.diff 与 windows/README.md。切换到新版本前需重新定位锚点并实机验证。"
+}

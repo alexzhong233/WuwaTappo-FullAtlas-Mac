@@ -21,14 +21,36 @@
 
 两侧的 FullAtlas 前端模块同源，平台差异集中在 3 个文件的各 4 行里，收敛计划见 [windows/README.md](windows/README.md) 末尾。
 
+## 构建
+
+两个平台都无法交叉编译（macOS 侧要 Xcode，Windows 侧要官方 Windows 客户端 + PyInstaller），
+所以统一入口按当前系统分派，真正的双平台并行发生在 CI。
+
+```bash
+npm run build:check      # 先看当前系统缺什么前置条件
+npm run build:mac        # macOS：Tauri 构建
+npm run build:win        # Windows：取官方基底 → 注入 → 冻结 → 装配
+npm run build:all        # 构建当前系统能构建的那一平台，并提示另一平台该在哪构建
+
+npm run build:win -- --package     # 构建完打 zip 到 dist/
+npm run build:check -- --platform=win
+```
+
+| 场景 | 产出 |
+| --- | --- |
+| push 到 `main` | CI 同时跑 `build.yml`（macos-15）与 `build-windows.yml`（windows-2022），各自上传 artifact |
+| 打 tag `v*` | 两个平台的产物一起进同一个 Release（Windows 缺失时只发 macOS，不阻断） |
+
+Windows 侧版本由 `windows/upstream-win.json` 锁定，不会因为官方发新版就静默构建未适配的版本。
+
 ## 支持情况
 
 | 项目 | 当前状态 |
 | --- | --- |
 | 服务区域 | 国服；国际服代码保留自上游，未整合 FullAtlas，不作为本项目发行目标 |
-| 系统 | Apple Silicon（M 系列），macOS 13 及以上 |
+| 系统 | macOS：Apple Silicon（M 系列），macOS 13 及以上；Windows：10/11 x64 |
 | 整合版本 | 1.2.2-alpha.1 实验版，基于官方国服 1.0.3 与 FullAtlas v1.2 |
-| 分支 | `official-1.0.3`；`main` 仍为 1.0.2 基底 |
+| 分支 | `main` 为 1.0.3 基底；两个平台同仓共用 |
 | 验证 | 自动测试、原生构建、签名与 ZIP / DMG 校验通过；角色和设置面板可显示，完整业务仍需实机验收 |
 | 签名 | Ad hoc 临时签名，未通过 Apple 公证 |
 

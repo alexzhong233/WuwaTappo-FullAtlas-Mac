@@ -2,16 +2,15 @@
   官方更新跟进流水线（默认只准备基底，不动 app\）
 
   流程：
-    1. 查官方清单，拿到最新版本与安装包地址
-    2. 下载安装包到 build\updates\<版本>\
-    3. NSIS 静默解包到 build\updates\<版本>\app\
-    4. 把新版主程序复制成 build\updates\<版本>\base\WuwaTappo.official.exe
-    5. 在该基底上试跑注入（解包 + build_integration），只生成 staging，不碰 app\
-    6. 输出结论文本：锚点是否全命中
+    1. 查官方清单，拿到最新版本
+    2. 调用 fetch-official.ps1 取基底（7-Zip 解包，绝不执行官方安装器）
+    3. 在该基底上试跑注入（解包 + build_integration），只生成 staging，不碰 app\
+    4. 输出结论文本：锚点是否全命中
 
   用法：
-    powershell -ExecutionPolicy Bypass -File tools\update-watch.ps1            # 只检查 + 下载 + 解包 + 试注入
-    powershell -ExecutionPolicy Bypass -File tools\update-watch.ps1 -SkipBuild # 只检查版本
+    powershell -ExecutionPolicy Bypass -File tools\update-watch.ps1              # 查版本 + 取基底 + 试注入
+    powershell -ExecutionPolicy Bypass -File tools\update-watch.ps1 -SkipBuild   # 只查版本
+    powershell -ExecutionPolicy Bypass -File tools\update-watch.ps1 -Installer D:\x\setup.exe
 
   注意：注入成功 ≠ 功能正常。staging 通过后仍需 tools\build.ps1 -Base <新基底> 全量重建并冒烟，
         再手工替换 app\（旧目录改名留作回滚）。
@@ -37,18 +36,16 @@ function Get-Json([string]$url) {
 
 function Get-LocalBaseVersion {
   $cfg = Join-Path $Root 'build\local_config.json'
-  if (Test-Path -LiteralPath $cfg) { return [string](Get-Content -LiteralPath $cfg -Raw | ConvertFrom-Json).client_version }
+  if (Test-Path -LiteralPath $cfg) { return [string](Get-Content -LiteralPath $cfg -Raw -Encoding UTF8 | ConvertFrom-Json).client_version }
   return ''
 }
 
-"== 1/5 查询官方版本 =="
+"== 1/4 查询官方版本 =="
 $hostJson = Get-Json "$AssetsHost/app/json-host/latest_host.json"
 $manifest = Get-Json ([string]$hostJson.url)
 $remoteVer = [string]$manifest.version
-$url = [string]$manifest.platforms.'windows-x86_64'.url
 $localVer = Get-LocalBaseVersion
 "官方: $remoteVer   本地基底: $localVer"
-"安装包: $url"
 
 if (-not $Force) {
   try {
@@ -60,51 +57,25 @@ if (-not $Force) {
 }
 if ($SkipBuild) { return }
 
-"== 2/5 下载安装包 =="
-$workDir = Join-Path $Root "build\updates\$remoteVer"
-New-Item -ItemType Directory -Path $workDir -Force | Out-Null
-if ($Installer) {
-  $setup = $Installer
-  "使用指定安装包: $setup"
-} else {
-  $setup = Join-Path $workDir (Split-Path $url -Leaf)
-  if ((Test-Path -LiteralPath $setup) -and -not $Force) {
-    "已存在，跳过下载: $setup"
-  } else {
-    try {
-      [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    } catch { }
-    $dl = New-Object System.Net.WebClient
-    $dl.Proxy = $null
-    $dl.Headers.Add('User-Agent', 'WuwaTappo-FullAtlas-UpdateCheck/1.0')
-    try {
-      $dl.DownloadFile($url, $setup)
-    } finally { $dl.Dispose() }
-    "下载完成: {0:N1} MB" -f ((Get-Item -LiteralPath $setup).Length / 1MB)
-  }
-}
-if (-not (Test-Path -LiteralPath $setup)) { throw "安装包不存在: $setup" }
+"== 2/4 获取新版基底（7-Zip 解包，不执行安装器）=="
+$fetch = Join-Path $PSScriptRoot 'fetch-official.ps1'
+$fetchArgs = @('-Version', $remoteVer)
+if ($Installer) { $fetchArgs = @('-Installer', $Installer) }
+if ($Force) { $fetchArgs += '-Force' }
+& powershell -NoProfile -ExecutionPolicy Bypass -File $fetch @fetchArgs
+if ($LASTEXITCODE -ne 0) { throw '获取基底失败' }
 
-"== 3/5 静默解包（NSIS /S /D=）=="
-$extractDir = Join-Path $workDir 'app'
-if (Test-Path -LiteralPath $extractDir) { Remove-Item -LiteralPath $extractDir -Recurse -Force }
-New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
-$proc = Start-Process -FilePath $setup -ArgumentList '/S', "/D=$extractDir" -Wait -PassThru
-$inner = Get-ChildItem -LiteralPath $extractDir -Recurse -Filter 'WuwaTappo.exe' -ErrorAction SilentlyContinue |
-  Sort-Object Length -Descending | Select-Object -First 1
-if (-not $inner) {
-  throw "解包后未找到 WuwaTappo.exe（退出码 $($proc.ExitCode)）。请手工解包后把内层主程序放到 $workDir\base\WuwaTappo.official.exe 再重跑。"
-}
-"内层主程序: $($inner.FullName)  ({0:N1} MB)" -f ($inner.Length / 1MB)
-
-"== 4/5 准备新基底 =="
-$newBase = Join-Path $workDir 'base'
-if (Test-Path -LiteralPath $newBase) { Remove-Item -LiteralPath $newBase -Recurse -Force }
-New-Item -ItemType Directory -Path $newBase -Force | Out-Null
-Copy-Item -LiteralPath $inner.FullName -Destination (Join-Path $newBase 'WuwaTappo.official.exe')
+$currentFile = Join-Path $Root 'build\official\current.json'
+if (-not (Test-Path -LiteralPath $currentFile)) { throw "fetch-official.ps1 未产出 $currentFile" }
+$current = Get-Content -LiteralPath $currentFile -Raw -Encoding UTF8 | ConvertFrom-Json
+$newBase = [string]$current.base
+$officialExe = [string]$current.official
+if (-not (Test-Path -LiteralPath $officialExe)) { throw "基底主程序不存在: $officialExe" }
 "基底: $newBase"
 
-"== 5/5 试跑注入（只生成 staging，不动 app\）=="
+"== 3/4 试跑注入（只生成 staging，不动 app\）=="
+$workDir = Join-Path $Root "build\updates\$remoteVer"
+New-Item -ItemType Directory -Path $workDir -Force | Out-Null
 $stagingRoot = Join-Path $workDir 'staging'
 if (Test-Path -LiteralPath $stagingRoot) { Remove-Item -LiteralPath $stagingRoot -Recurse -Force }
 New-Item -ItemType Directory -Path $stagingRoot -Force | Out-Null

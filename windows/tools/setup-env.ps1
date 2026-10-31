@@ -1,24 +1,52 @@
 ﻿<#
-  创建项目独立的 Python 构建环境（.venv）并安装依赖
+  创建 Windows 侧独立的 Python 构建环境（.venv）并安装依赖
 
-  用法： powershell -ExecutionPolicy Bypass -File tools\setup-env.ps1
+  解释器查找顺序：
+    1. 环境变量 WUWA_PYTHON 指定的路径
+    2. 本机已知的托管 Python 3.13（开发者机器）
+    3. PATH 上的 python3.13 / python3.12 / python
+
+  PyInstaller 6.16 对 3.14 支持不稳，优先 3.12 / 3.13。
+
+  用法： powershell -ExecutionPolicy Bypass -File windows\tools\setup-env.ps1 [-Force]
 #>
+param([switch]$Force)
+
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path $PSScriptRoot -Parent
 $Venv = Join-Path $Root '.venv'
 
-# 优先用托管 Python 3.13；PyInstaller 6.16 对 3.14 支持不稳
-$candidates = @(
-  'C:\Users\eatfo\.workbuddy\binaries\python\versions\3.13.12\python.exe',
-  'C:\Users\eatfo\.workbuddy\binaries\python\versions\3.13.6\python.exe'
-)
-$Python = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-if (-not $Python) {
-  $cmd = Get-Command python -ErrorAction SilentlyContinue
-  if ($cmd) { $Python = $cmd.Source } else { throw '找不到 Python 3.13，请先安装或修改本脚本里的路径' }
+function Find-Python {
+  if ($env:WUWA_PYTHON -and (Test-Path -LiteralPath $env:WUWA_PYTHON)) {
+    return $env:WUWA_PYTHON
+  }
+  # 托管 3.13 优先：PATH 上常见的是 3.14（PyInstaller 6.16 对它有兼容问题）
+  foreach ($p in @(
+      'C:\Users\eatfo\.workbuddy\binaries\python\versions\3.13.12\python.exe',
+      'C:\Users\eatfo\.workbuddy\binaries\python\versions\3.13.6\python.exe'
+    )) {
+    if (Test-Path -LiteralPath $p) { return $p }
+  }
+  foreach ($name in @('python3.13', 'python3.12', 'python3', 'python')) {
+    $cmd = Get-Command $name -ErrorAction SilentlyContinue
+    if ($cmd -and $cmd.Source -notmatch 'WindowsApps') { return $cmd.Source }
+  }
+  throw '找不到 Python。请安装 3.13，或用 WUWA_PYTHON 指向解释器路径。'
 }
+
+$Python = Find-Python
+$verText = (& $Python --version 2>&1) -join ' '
 "Python: $Python"
-"版本: " + (& $Python --version 2>&1)
+"版本  : $verText"
+
+if ($verText -match '3\.1[45]') {
+  Write-Warning "PyInstaller 6.16 对 $verText 支持不稳，建议 3.13。冻结失败时换解释器并加 -Force 重跑。"
+}
+
+if ($Force -and (Test-Path -LiteralPath $Venv)) {
+  Remove-Item -LiteralPath $Venv -Recurse -Force
+  '已删除旧 .venv（-Force）'
+}
 
 if (-not (Test-Path -LiteralPath (Join-Path $Venv 'Scripts\python.exe'))) {
   & $Python -m venv $Venv

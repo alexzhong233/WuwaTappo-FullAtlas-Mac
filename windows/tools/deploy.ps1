@@ -1,11 +1,14 @@
 ﻿<#
   装配运行目录：把 build 产物 + 素材 + 运行时组装成完整可运行目录，同步到 app\
 
-  用法： powershell -ExecutionPolicy Bypass -File tools\deploy.ps1
+  用法： powershell -ExecutionPolicy Bypass -File tools\deploy.ps1 [-Target <目录>] [-NoRuntime] [-NoAssets]
   说明： 只覆盖程序与静态资源，保留 app\ 下的运行状态
          （local_config.json / offline_state.json / assistant_state.json / profile\）
+
+        -NoRuntime  不内嵌 WebView2 运行时（CI / 小体积产物用，回退系统运行时）
+        -NoAssets   不复制 assets\cache（缺素材缓存时程序按需回源官方 CDN）
 #>
-param([string]$Target)
+param([string]$Target, [switch]$NoRuntime, [switch]$NoAssets)
 
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path $PSScriptRoot -Parent
@@ -28,15 +31,20 @@ Copy-Item -LiteralPath $frozen -Destination (Join-Path $Payload 'host') -Recurse
 Copy-Item -LiteralPath (Join-Path $Payload 'host\LocalGalleryHost.exe') -Destination (Join-Path $Payload 'LocalGalleryHost.exe')
 Copy-Item -LiteralPath (Join-Path $Payload 'host\_internal') -Destination (Join-Path $Payload '_internal') -Recurse
 
-# 素材缓存
-Copy-Item -LiteralPath (Join-Path $Root 'assets\cache') -Destination (Join-Path $Payload 'cache') -Recurse
+# 素材缓存（CI 或未拉缓存时可缺省，运行时按需回源）
+$assets = Join-Path $Root 'assets\cache'
+if (-not $NoAssets -and (Test-Path -LiteralPath $assets)) {
+  Copy-Item -LiteralPath $assets -Destination (Join-Path $Payload 'cache') -Recurse
+} else {
+  Write-Warning '跳过素材缓存：产物不含离线图鉴，首次浏览会回源官方 CDN'
+}
 
 # WebView2 固定运行时：取系统已装的最新一份，避免硬编码版本号
 $wvRoots = @(
   'C:\Program Files (x86)\Microsoft\EdgeWebView\Application',
   'C:\Program Files\Microsoft\EdgeWebView\Application'
 ) | Where-Object { Test-Path -LiteralPath $_ }
-if ($wvRoots) {
+if (-not $NoRuntime -and $wvRoots) {
   $wv = Get-ChildItem -LiteralPath $wvRoots[0] -Directory -ErrorAction SilentlyContinue |
     Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'msedgewebview2.exe') } |
     Sort-Object { try { [version]($_.Name -replace '[^0-9.]', '') } catch { [version]'0.0' } } |
@@ -63,16 +71,16 @@ if (Test-Path -LiteralPath (Join-Path $Root 'docs')) {
 }
 Copy-Item -LiteralPath (Join-Path $Root 'build\local_config.json') -Destination (Join-Path $Payload 'package_config.json')
 
-# 同步到 app\（不清理多余文件，保留账号与运行状态）
-if (-not (Test-Path -LiteralPath $App)) { New-Item -ItemType Directory -Path $App | Out-Null }
-robocopy $Payload $App /E /NFL /NDL /NJH /NJS /R:1 /W:1 | Out-Null
-if ($LASTEXITCODE -ge 8) { throw "同步到 app\ 失败，robocopy 退出码 $LASTEXITCODE" }
-
-# 无控制台启动器（若已编译）
+# 无控制台启动器（若已编译）——必须在 robocopy 之前放进 payload，否则同步不到 app\
 $launcherExe = Join-Path $Root 'build\launcher\dist\WuwaTappoLauncher.exe'
 if (Test-Path -LiteralPath $launcherExe) {
   Copy-Item -LiteralPath $launcherExe -Destination (Join-Path $Payload 'WuwaTappoLauncher.exe')
 }
+
+# 同步到 app\（不清理多余文件，保留账号与运行状态）
+if (-not (Test-Path -LiteralPath $App)) { New-Item -ItemType Directory -Path $App | Out-Null }
+robocopy $Payload $App /E /NFL /NDL /NJH /NJS /R:1 /W:1 | Out-Null
+if ($LASTEXITCODE -ge 8) { throw "同步到 app\ 失败，robocopy 退出码 $LASTEXITCODE" }
 
 # 启动器（相对路径，可随目录搬迁）；start.cmd 用纯 ASCII 名，供桌面快捷方式引用
 $launcher = @'

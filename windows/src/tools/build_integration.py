@@ -82,7 +82,7 @@ onError: error => console.error('[local-gallery]', error)
 window.__WUWA_LOCAL_ATLAS__ = localAtlasController;
 localAtlasController.ready.then(() => { localStartOnlineServices(); return bootstrap(); }).catch(error => {
  console.error('[local-gallery] startup failed', error);
- document.getElementById('app').textContent = '请通过本地版启动器运行。' + error.message;
+ document.getElementById('app').textContent = '本地素材服务没有启动，请用桌面快捷方式重新打开；仍不行请查看安装目录下的 host.stderr.log。' + (error?.message || '');
 });
 watch(localAtlasController.enabled, on => { if (!on) localStartOnlineServices(); });
 '''
@@ -171,14 +171,14 @@ container = next(c for c in p['containers'] if settings['body'] < c['start'] < s
 h = pi['createBaseVNode']
 with_modifiers = pi['withModifiers']
 setup = f'''
-const __localEnabled=__lg.enabled,__localBusy=__lg.busy,__localSync=__lg.syncStatus;
+const __localEnabled=__lg.enabled,__localBusy=__lg.busy,__localSync=__lg.syncStatus,__localCache=__lg.cacheReady;
 async function __toggleLocal(event){{try{{await __lg.setEnabled(event.target.checked);}}catch(error){{{pi['showToast']}(error.message);}}event.target.checked=__localEnabled.value;}}
 async function __syncLocal(){{try{{const status=await __lg.syncCache(true);{pi['showToast']}('本地图鉴已同步：'+(status.result?.atlas_count||'')+'项');}}catch(error){{{pi['showToast']}(error.message);}}}}
 '''
 row = f'''{h}('div',{{class:'setting-item','data-local-gallery-setting':'true'}},[
- {h}('div',{{class:'setting-label'}},[{h}('div',{{class:'setting-title'}},'本地全图鉴'),{h}('div',{{class:'setting-sub'}},__localBusy.value?'正在切换本地显示模式…':__localEnabled.value?'已开启 · 联机不可用，其他网络功能正常':'开启全部本地图鉴；关闭后恢复账号背包',1)]),
- {h}('div',{{class:'setting-content'}},[{h}('label',{{class:'setting-switch'}},[{h}('input',{{type:'checkbox',role:'switch','aria-label':'本地全图鉴',style:'display:block;position:absolute;width:1px;height:1px;opacity:0',checked:__localEnabled.value,disabled:__localBusy.value||__localSync.value.status==='running',onChange:__toggleLocal,onMousedown:{with_modifiers}(()=>{{}},['stop'])}},null,40,['checked','disabled']),{h}('span',{{class:'setting-slider'}})])])]),
- {h}('div',{{class:'setting-item','data-local-gallery-sync':'true'}},[{h}('div',{{class:'setting-label'}},[{h}('div',{{class:'setting-title'}},'更新本地图鉴'),{h}('div',{{class:'setting-sub'}},__localSync.value.status==='running'?'正在同步 '+__localSync.value.done+'/'+__localSync.value.total:'联网检查新增图鉴，本地全图鉴开启时也可同步',1)]),{h}('button',{{class:'setting-btn',type:'button',disabled:__localSync.value.status==='running',onClick:__syncLocal}},'检查并同步',8,['disabled'])]),
+ {h}('div',{{class:'setting-label'}},[{h}('div',{{class:'setting-title'}},'本地全图鉴'),{h}('div',{{class:'setting-sub'}},__localBusy.value?'正在切换本地显示模式…':!__localCache.value?(__localSync.value.status==='running'?'正在下载本地素材 '+__localSync.value.done+'/'+__localSync.value.total+'，完成后自动可用':__localSync.value.status==='failed'?'本地素材下载失败，点下方「检查并同步」重试':'本地素材还没准备好，点下方「检查并同步」开始下载'):__localEnabled.value?'已开启 · 联机不可用，其他网络功能正常':'开启全部本地图鉴；关闭后恢复账号背包',1)]),
+ {h}('div',{{class:'setting-content'}},[{h}('label',{{class:'setting-switch'}},[{h}('input',{{type:'checkbox',role:'switch','aria-label':'本地全图鉴',style:'display:block;position:absolute;width:1px;height:1px;opacity:0',checked:__localEnabled.value,disabled:__localBusy.value||!__localCache.value||__localSync.value.status==='running',onChange:__toggleLocal,onMousedown:{with_modifiers}(()=>{{}},['stop'])}},null,40,['checked','disabled']),{h}('span',{{class:'setting-slider'}})])])]),
+ {h}('div',{{class:'setting-item','data-local-gallery-sync':'true'}},[{h}('div',{{class:'setting-label'}},[{h}('div',{{class:'setting-title'}},'更新本地图鉴'),{h}('div',{{class:'setting-sub'}},__localSync.value.status==='running'?'正在同步 '+__localSync.value.done+'/'+__localSync.value.total:!__localCache.value?'首次启动要联网补齐本地素材（后台进行，不耽误玩）':'联网检查新增图鉴，本地全图鉴开启时也可同步',1)]),{h}('button',{{class:'setting-btn',type:'button',disabled:__localSync.value.status==='running',onClick:__syncLocal}},'检查并同步',8,['disabled'])]),
 '''
 edits = [(0, 0, f'import {{zzLocalAtlas as __lg}} from "./{shared_name}";\n'),
          (settings['body'] + 1, settings['body'] + 1, setup),

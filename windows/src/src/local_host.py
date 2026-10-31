@@ -184,6 +184,15 @@ def cache_ready():
     except (OSError, ValueError, KeyError):
         return False
 
+def cache_summary():
+    """给前端显示「已下载 / 应有」用。发行包不带 cache，首次启动要从 0 拉到 3000+。"""
+    try:
+        manifest = json.loads((ROOT / 'cache/asset_manifest.json').read_text(encoding='utf-8'))
+        assets = len(manifest.get('records') or [])
+    except (OSError, ValueError):
+        assets = 0
+    return {'assets': assets, 'expected': CONFIG.get('asset_count') or 0}
+
 READY = cache_ready()
 ACTUAL_OFFLINE = False
 SYNC = {'status': 'idle', 'done': 0, 'total': 0, 'checked_at': 0}
@@ -268,10 +277,13 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(200, {'ready': READY, 'enabled': ACTUAL_OFFLINE,
                                       'mod_version': CONFIG.get('mod_version'), 'client_version': CONFIG.get('client_version'),
                                       'firewall_verified': False, 'mode_verified': True, 'network_policy': 'rooms-only',
-                                      'asset_count': CONFIG['asset_count'], 'atlas_count': CONFIG['atlas_count'], 'sync': dict(SYNC)})
+                                      'asset_count': CONFIG['asset_count'], 'atlas_count': CONFIG['atlas_count'],
+                                      'cache': cache_summary(), 'sync': dict(SYNC)})
         if path == '/sync/status':
             return self.respond(200, dict(SYNC))
         if path == '/offline-data':
+            if not READY:
+                return self.respond(409, {'error': '本地素材还在准备中，请等同步完成后再开启本地图鉴'})
             return self.respond(200, {'catalog': json.loads((ROOT / 'cache/offline_catalog.json').read_text(encoding='utf-8')),
                                       'atlas': json.loads((ROOT / 'cache/atlas.json').read_text(encoding='utf-8'))['data'],
                                       'atlas_count': CONFIG['atlas_count'], 'asset_count': CONFIG['asset_count']})
@@ -384,13 +396,22 @@ def main():
         STATE.write_text('{"enabled":false}', encoding='utf-8')
         return
     if desired_offline():
-        if not READY:
-            raise RuntimeError('Offline mode is saved but cache is incomplete; refusing to launch host.')
-        set_firewall(False)
-        ACTUAL_OFFLINE = True
+        if READY:
+            set_firewall(False)
+            ACTUAL_OFFLINE = True
+        else:
+            # 升级或手工清过缓存时素材可能还没补齐。这里不能像以前那样抛错退出：
+            # 服务一退，前端连 /status 都拿不到，整块界面会被替换成一行
+            # 「请通过本地版启动器运行」。退回联机模式并落盘，等后台同步补齐后
+            # 用户重新打开开关即可。
+            STATE.write_text(json.dumps({'enabled': False}), encoding='utf-8')
+            print(json.dumps({'warning': 'offline mode requested but cache is incomplete; staying online'}), flush=True)
     else:
         set_firewall(False)
     server = ThreadingHTTPServer(('127.0.0.1', PORT), Handler)
+    if not READY:
+        # 发行包不带素材缓存（体积原因），首次启动就后台补齐，前端只显示进度。
+        start_sync()
     print(json.dumps({'ready': READY, 'enabled': ACTUAL_OFFLINE, 'port': PORT}), flush=True)
     server.serve_forever()
     server.server_close()

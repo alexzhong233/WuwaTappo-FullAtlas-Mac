@@ -155,7 +155,7 @@ windows\
 1. **本机安全策略禁止 COM**（`WScript.Shell`、`Shell.Application` 一律拦截）。快捷方式改用 `pylnk3` 直接写 `.lnk` 二进制（`tools\make_shortcut.py`）。手写字节不行——Windows 要求 `LinkTargetIDList`，只有 `LinkInfo` 的链接会被 shell 拒绝。
 2. **`launch.ps1` 会被安全策略自动删除**（自提权脚本 `Start-Process -Verb RunAs`）。内容存档在 `src\installer\launch.ps1.disabled.txt`，入口统一用 `WuwaTappoLauncher.exe`。
 3. **`schtasks.exe` 被黑名单拦截**，注册定时检查要用 PowerShell 原生 `Register-ScheduledTask`（`tools\install-schedule.ps1` 已处理）。
-4. **CI 已接入**（`.github/workflows/build-windows.yml`，`windows-2022` runner）。发行包统一不带素材缓存与内嵌 WebView2，体积约 80 MB；`/status` 的 `ready` 会是 `false`，图鉴按需回源官方 CDN（`tools\payload.ps1` 里排除了 `cache\`，本机跑过 `prepare_cache.py` 也不会让安装包翻倍）。没有内嵌运行时，所以产物依赖系统 WebView2；CI 里有一条断言盯着入口 stub 的回退分支（`build_report_v2.json` 的 `runtime_fallback`），防止「stub 又把浏览器路径钉死到空目录」这类回归。
+4. **CI 已接入**（`.github/workflows/build-windows.yml`，`windows-2022` runner）。发行包统一不带素材缓存与内嵌 WebView2，体积约 80 MB；首次启动由本地素材服务自动补齐（约 100 MB / 3000+ 张），补齐前 `/status` 的 `ready` 为 `false`，前端按联机模式启动、设置页显示下载进度，不阻塞进入游戏（`tools\payload.ps1` 里排除了 `cache\`，本机跑过 `prepare_cache.py` 也不会让安装包翻倍）。没有内嵌运行时，所以产物依赖系统 WebView2；CI 里有一条断言盯着入口 stub 的回退分支（`build_report_v2.json` 的 `runtime_fallback`），防止「stub 又把浏览器路径钉死到空目录」这类回归。
 5. **安装包用 NSIS + MUI2**（`tools\package-installer.ps1`）：按用户装到 `%LOCALAPPDATA%\Programs\`，安装器本身不需要管理员权限。界面是欢迎页 → 选目录 → 进度 → 完成页（可直接勾选启动），语言跟系统走（简中 / 英文）。桌面与开始菜单快捷方式指向 `WuwaTappoLauncher.exe`，图标用 `app.ico`（`deploy.ps1` 从官方客户端 exe 里提取的 `icon_32512.ico`），卸载项同样带图标。覆盖安装会先安静结束正在运行的进程，卸载时可选择保留素材缓存与登录状态。
    **入口必须是 GUI 启动器**：缺了 `WuwaTappoLauncher.exe` 时打包脚本直接报错，不再回退 `start.cmd`——那个回退会让安装包弹控制台黑框、快捷方式图标变成 cmd 的。
    绿色 zip 仍保留（`tools\package-win.ps1`），供调试与免安装场景。
@@ -169,6 +169,6 @@ windows\
 | --- | --- | --- |
 | `local_atlas_controller.js` | 直接 `rawFetch` 到本机 HTTP | 有 `d.request` 钩子时走原生 IPC；`assetsHost` 用 `offlineData.assets_host` |
 | `assistant_dashboard.js` | 「官方基底监控」卡片，查 Kuro 版本 | 「Mac 版本更新」卡片，查 `/official/update-check` |
-| `desktop_assistant.js` | `VERSION = '1.2'` | `VERSION = '1.2.4'` |
+| `desktop_assistant.js` | `VERSION = '1.2'` | `VERSION = '1.2.5'` |
 
 收敛方案：以 macOS 版已有的 `d.request` 作为传输层抽象，Windows 侧实现一个走本机 HTTP 的版本，两边共用一个文件。这一步还没做。

@@ -28,6 +28,10 @@ class CacheSyncTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+    def run_sync(self, progress=lambda *args: None):
+        # 国服/国际服是两个官方源，域名校验必须显式放行本用例的素材域名
+        return sync_cache.sync(self.root, progress, api=self.host, allowed_hosts=[self.host])
+
     def get_json(self, url):
         if url.endswith('/activity-config'): return json.loads(json.dumps(self.activity))
         if url.endswith('/atlas'): return json.loads(json.dumps(self.atlas))
@@ -37,7 +41,7 @@ class CacheSyncTests(unittest.TestCase):
     def test_new_catalog_commits_complete_verified_cache(self):
         progress = []
         with patch.object(sync_cache, 'get_json', side_effect=self.get_json), patch.object(sync_cache.urllib.request, 'urlopen', side_effect=lambda *a, **k: io.BytesIO(self.png)):
-            result = sync_cache.sync(self.root, lambda done, total: progress.append((done, total)))
+            result = self.run_sync(lambda done, total: progress.append((done, total)))
         self.assertEqual(result, {'changed': True, 'atlas_count': 1, 'asset_count': 3, 'assets_json_ts': 2})
         self.assertEqual(progress[-1], (3, 3))
         manifest = json.loads((self.cache / 'asset_manifest.json').read_text())
@@ -48,14 +52,14 @@ class CacheSyncTests(unittest.TestCase):
     def test_failed_image_download_keeps_previous_cache(self):
         before = (self.cache / 'atlas.json').read_bytes()
         with patch.object(sync_cache, 'get_json', side_effect=self.get_json), patch.object(sync_cache.urllib.request, 'urlopen', side_effect=OSError('network failure')), patch.object(sync_cache.time, 'sleep'):
-            with self.assertRaises(OSError): sync_cache.sync(self.root, lambda *args: None)
+            with self.assertRaises(OSError): self.run_sync()
         self.assertEqual((self.cache / 'atlas.json').read_bytes(), before)
         self.assertFalse(list(self.root.glob('cache_previous_*')))
 
     def test_missing_id_mapping_never_commits(self):
         self.catalog['character_skin_atlas']['2']['height_light_id'] = 999
         with patch.object(sync_cache, 'get_json', side_effect=self.get_json):
-            with self.assertRaisesRegex(ValueError, '映射缺失'): sync_cache.sync(self.root, lambda *args: None)
+            with self.assertRaisesRegex(ValueError, '映射缺失'): self.run_sync()
         self.assertEqual(json.loads((self.cache / 'atlas.json').read_text()), self.old_atlas)
 
     def test_unchanged_version_downloads_no_images(self):
@@ -64,9 +68,22 @@ class CacheSyncTests(unittest.TestCase):
         self.atlas['data'] = [{'asset_id': 2}]
         (self.cache / 'atlas.json').write_text(json.dumps(self.atlas), encoding='utf-8')
         with patch.object(sync_cache, 'get_json', side_effect=self.get_json), patch.object(sync_cache.urllib.request, 'urlopen') as download:
-            result = sync_cache.sync(self.root, lambda *args: None)
+            result = self.run_sync()
         self.assertFalse(result['changed'])
         download.assert_not_called()
+
+    def test_empty_install_bootstraps_cache(self):
+        """发行包不带 cache：宿主首次启动必须能从零把整套素材拉齐。"""
+        import shutil
+        shutil.rmtree(self.cache)
+        progress = []
+        with patch.object(sync_cache, 'get_json', side_effect=self.get_json), patch.object(sync_cache.urllib.request, 'urlopen', side_effect=lambda *a, **k: io.BytesIO(self.png)):
+            result = self.run_sync(lambda done, total: progress.append((done, total)))
+        self.assertTrue(result['changed'])
+        self.assertEqual(progress[-1], (3, 3))
+        manifest = json.loads((self.cache / 'asset_manifest.json').read_text())
+        self.assertEqual(len(manifest['records']), 3)
+        self.assertFalse(list(self.root.glob('cache_previous_*')))
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

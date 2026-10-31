@@ -8,6 +8,13 @@ def get_json(url):
     with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'WuwaTappo-LocalGallery-Cache'}), timeout=30) as response:
         return json.load(response)
 
+def _read_json(path, default):
+    """读旧缓存做增量对比。全新安装根本没有这些文件，不能直接抛错。"""
+    try:
+        return json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return default
+
 def sync(root, progress, api=None, allowed_hosts=None):
     # 国服与国际服的图鉴/素材是两个官方源，域名与内容都可能不同。
     # 由调用方（local_host 读 local_config.json）传入，缺省仍走国服。
@@ -25,10 +32,15 @@ def sync(root, progress, api=None, allowed_hosts=None):
     host = activity['data']['assets_host'].rstrip('/')
     if urllib.parse.urlparse(host).hostname not in allowed:
         raise ValueError('未识别的素材域名，保留原缓存')
-    old_atlas = json.loads((cache / 'atlas.json').read_text(encoding='utf-8'))
-    old_activity = json.loads((cache / 'activity-config.json').read_text(encoding='utf-8'))
-    if old_activity['data'].get('assets_json_ts') == activity['data'].get('assets_json_ts') and old_atlas['data'] == atlas['data']:
-        return {'changed': False, 'atlas_count': len(atlas['data']), 'asset_count': len(json.loads((cache / 'asset_manifest.json').read_text())['records'])}
+    old_atlas = _read_json(cache / 'atlas.json', None)
+    old_activity = _read_json(cache / 'activity-config.json', None)
+    old_manifest = _read_json(cache / 'asset_manifest.json', None)
+    # 三份旧文件齐备才走「没变化就不下载」的捷径；缺任何一份说明是首次安装
+    # 或缓存被清理过，必须完整拉一遍，否则 READY 永远为 false。
+    if (old_manifest is not None and old_atlas is not None and old_activity is not None
+            and (old_activity.get('data') or {}).get('assets_json_ts') == activity['data'].get('assets_json_ts')
+            and old_atlas.get('data') == atlas['data']):
+        return {'changed': False, 'atlas_count': len(atlas['data']), 'asset_count': len(old_manifest.get('records') or [])}
     pointer = get_json(host + '/app/json-host/appearance_asset_host.json')
     url = pointer['url']
     if urllib.parse.urlparse(url).hostname != urllib.parse.urlparse(host).hostname:
@@ -42,6 +54,9 @@ def sync(root, progress, api=None, allowed_hosts=None):
         entry = catalog[typ].get(str(item['asset_id']))
         if not entry or str(entry.get('height_light_id')) not in catalog[typ.removesuffix('_atlas')]:
             raise ValueError('图鉴到可用外观的映射缺失，保留原缓存')
+    # 上次同步被强杀（关窗口 / 断电）会留下半套 staging，重来前先清掉，避免越积越多
+    for stale in root.glob('cache_staging_*'):
+        shutil.rmtree(stale, ignore_errors=True)
     stage = root / ('cache_staging_' + str(time.time_ns()))
     assets = stage / 'assets'
     assets.mkdir(parents=True)
@@ -113,11 +128,18 @@ def sync(root, progress, api=None, allowed_hosts=None):
                 time.sleep(attempt + 0.5)
         raise error
     archive = root / ('cache_previous_' + str(time.time_ns()))
-    rename_dir(cache, archive)
+    # 首次安装时 cache 目录并不存在：没有旧代可归档，直接把新的一代改名上线。
+    if cache.exists():
+        rename_dir(cache, archive)
     try:
         rename_dir(stage, cache)
     except Exception:
-        rename_dir(archive, cache)
+        if archive.exists():
+            rename_dir(archive, cache)
         raise
+    # 宿主只用最近两代做旧素材回退，更早的整代缓存直接删掉，否则每次同步
+    # 都会多留近百 MB。
+    for stale in sorted(root.glob('cache_previous_*'), reverse=True)[2:]:
+        shutil.rmtree(stale, ignore_errors=True)
     return {'changed': True, 'atlas_count': len(atlas['data']), 'asset_count': len(records),
             'assets_json_ts': activity['data']['assets_json_ts']}

@@ -5498,7 +5498,7 @@ dependencies = [
 
 [[package]]
 name = "wuwatappo-mac"
-version = "1.2.2-alpha.1"
+version = "1.2.3"
 dependencies = [
  "block2",
  "chrono",

@@ -19,11 +19,28 @@ export async function prepareCatalog(root, profile) {
     validateCatalog(value);
     if (value.assets_host === profile.assetsOrigin) return;
   } catch {}
-  async function request(url, asset = false) {
+  async function request(url, asset = false, attempts = 3) {
     if (asset && (new URL(url).origin !== profile.assetsOrigin || new URL(url).protocol !== 'https:')) throw new Error('Unrecognized FullAtlas catalog origin');
-    const response = await fetch(url, {redirect: 'error', signal: AbortSignal.timeout(30000)});
-    if (!response.ok) throw new Error(`FullAtlas HTTP ${response.status}`);
-    return response.json();
+    // 国内 CDN 从海外 runner 连不稳，单次 10 秒连接超时就整条链失败；
+    // 重试的是同一地址、同一断言，成功与否的判定不变，只是不再被一次抖动打死。
+    let lastError;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        const response = await fetch(url, {redirect: 'error', signal: AbortSignal.timeout(30000)});
+        if (!response.ok) {
+          const error = new Error(`FullAtlas HTTP ${response.status}`);
+          // 4xx 是地址或权限问题，重试没有意义
+          if (response.status < 500) throw Object.assign(error, {fatal: true});
+          throw error;
+        }
+        return await response.json();
+      } catch (error) {
+        lastError = error;
+        if (error.fatal || attempt === attempts) break;
+        await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** (attempt - 1)));
+      }
+    }
+    throw lastError;
   }
   const [activity, atlas] = await Promise.all([request(profile.configUrl), request(new URL('/api/common/atlas', profile.configUrl))]);
   if (activity.code !== 0 || atlas.code !== 0 || activity.data.assets_host.replace(/\/$/, '') !== profile.assetsOrigin) throw new Error('Invalid official FullAtlas response');

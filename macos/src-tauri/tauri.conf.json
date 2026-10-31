@@ -23,9 +23,9 @@
       "app"
     ],
     "resources": {
-      "../LICENSE": "LICENSE",
-      "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",
-      "../licenses/FULLATLAS_LICENSE": "licenses/FULLATLAS_LICENSE",
+      "../../LICENSE": "LICENSE",
+      "../../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",
+      "../../licenses/FULLATLAS_LICENSE": "licenses/FULLATLAS_LICENSE",
       "../build/fullatlas-catalog.json": "fullatlas-catalog.json"
     },
     "icon": [

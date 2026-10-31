@@ -14,11 +14,13 @@ phase() {
 }
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# ROOT 是 macos/（平台实现根），REPO_ROOT 是仓库根：产物统一落在仓库根的 dist/，与 Windows 侧共用。
+REPO_ROOT="$(cd "$ROOT/.." && pwd)"
 APP=''
-OUTPUT="$ROOT/dist"
+OUTPUT="$REPO_ROOT/dist"
 
 usage() {
-  printf '%s\n' '用法：bash scripts/package-macos.sh [--app 完整应用路径] [--output 输出目录]'
+  printf '%s\n' '用法：bash macos/scripts/package-macos.sh [--app 完整应用路径] [--output 输出目录]'
 }
 
 while [ "$#" -gt 0 ]; do

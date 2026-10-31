@@ -25,6 +25,8 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const WINDOWS = join(repoRoot, 'windows');
+// macOS 平台实现整体在 macos/ 下；跨平台分派器（本文件）留在仓库根的 scripts/。
+const MACOS = join(repoRoot, 'macos');
 
 const argv = process.argv.slice(2);
 const has = name => argv.includes(`--${name}`);
@@ -84,9 +86,9 @@ function checkMac() {
   rows.push(['Node', process.version, true]);
   const rustup = which('rustup');
   rows.push(['rustup', rustup ?? '未找到', Boolean(rustup)]);
-  rows.push(['src-tauri', existsSync(join(repoRoot, 'src-tauri', 'Cargo.toml')) ? '存在' : '缺失', existsSync(join(repoRoot, 'src-tauri', 'Cargo.toml'))]);
+  rows.push(['src-tauri', existsSync(join(MACOS, 'src-tauri', 'Cargo.toml')) ? '存在' : '缺失', existsSync(join(MACOS, 'src-tauri', 'Cargo.toml'))]);
   rows.push(['node_modules', existsSync(join(repoRoot, 'node_modules')) ? '已装' : '未装（先 npm ci）', existsSync(join(repoRoot, 'node_modules'))]);
-  const upstream = readJson(join(repoRoot, 'upstream-cn.json'));
+  const upstream = readJson(join(MACOS, 'upstream-cn.json'));
   rows.push(['官方基底（锁）', upstream.version, true]);
   return { rows, ok: rows.every(([, , ok]) => ok) };
 }
@@ -135,7 +137,7 @@ function displayWidth(text) {
 
 function buildMac({ withPackage }) {
   section('macOS 构建');
-  const args = ['scripts/app.mjs', 'build'];
+  const args = [join('macos', 'scripts', 'app.mjs'), 'build'];
   if (passthrough.length) args.push('--', ...passthrough);
   run(process.execPath, args);
 
@@ -145,7 +147,7 @@ function buildMac({ withPackage }) {
   }
   section('macOS 打包');
   if (process.platform !== 'darwin') throw new Error('打包只能在 macOS 上执行');
-  run('bash', ['scripts/package-macos.sh']);
+  run('bash', [join('macos', 'scripts', 'package-macos.sh')]);
 }
 
 function buildWin({ withPackage }) {

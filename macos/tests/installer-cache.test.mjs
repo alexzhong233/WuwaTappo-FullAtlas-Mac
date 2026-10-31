@@ -9,6 +9,7 @@ import { getRegionProfile } from '../scripts/regions.mjs';
 import { pinnedInstallerCache, syncUpstream } from '../scripts/sync-upstream.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
+const repoRoot = path.resolve(root, '..');
 const bytes = Buffer.from('pinned official installer fixture');
 function fixtureLock(region = 'cn') {
   const profile = getRegionProfile(region);
@@ -108,8 +109,8 @@ test('restored installers avoid network but remain size and digest verified befo
 });
 
 test('workflows restore exact pins before setup and save only verified installer files', async () => {
-  const build = await readFile(path.join(root, '.github/workflows/build.yml'), 'utf8');
-  const sync = await readFile(path.join(root, '.github/workflows/sync-upstream.yml'), 'utf8');
+  const build = await readFile(path.join(repoRoot, '.github/workflows/build.yml'), 'utf8');
+  const sync = await readFile(path.join(repoRoot, '.github/workflows/sync-upstream.yml'), 'utf8');
   const restore = build.match(/      - name: Restore pinned official installer[\s\S]*?(?=      - )/)?.[0];
   assert.ok(restore);
   assert.ok(restore.includes('path: ${{ steps.installer.outputs.path }}'));
@@ -119,7 +120,7 @@ test('workflows restore exact pins before setup and save only verified installer
   assert.match(build, /Save verified official installer\n\s+if: steps\.prepare\.outcome == 'success' && steps\.installer-cache\.outputs\.cache-hit != 'true'/);
   assert.match(sync, /Read verified candidate installer cache identity\n\s+id: installer\n\s+if: steps\.extract\.outcome == 'success'/);
   assert.match(sync, /Save verified candidate official installer\n\s+if: steps\.extract\.outcome == 'success'/);
-  assert.ok(sync.indexOf('Save verified candidate official installer') > sync.indexOf('node scripts/sync-upstream.mjs --update-lock'));
+  assert.ok(sync.indexOf('Save verified candidate official installer') > sync.indexOf('node macos/scripts/sync-upstream.mjs --update-lock'));
   assert.ok(sync.includes('path: ${{ steps.installer.outputs.path }}'));
   assert.ok(sync.includes('key: ${{ steps.installer.outputs.key }}'));
 });

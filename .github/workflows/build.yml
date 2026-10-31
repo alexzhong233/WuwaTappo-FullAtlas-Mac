@@ -39,7 +39,7 @@ jobs:
           cache: npm
       - name: Read pinned official installer cache identity
         id: installer
-        run: node scripts/installer-cache.mjs
+        run: node macos/scripts/installer-cache.mjs
       - name: Restore pinned official installer
         id: installer-cache
         uses: actions/cache/restore@v4
@@ -58,8 +58,8 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            src-tauri/target
-          key: macos-arm64-${{ matrix.region }}-rust-1.97.1-${{ hashFiles('src-tauri/Cargo.lock') }}
+            macos/src-tauri/target
+          key: macos-arm64-${{ matrix.region }}-rust-1.97.1-${{ hashFiles('macos/src-tauri/Cargo.lock') }}
       - run: npm ci
       - name: Prepare verified regional resources and native build inputs
         id: prepare
@@ -81,13 +81,13 @@ jobs:
       - name: Verify and package ZIP and DMG
         run: |
           set -o pipefail
-          npm run package 2>&1 | tee .work/package-macos.log
+          npm run package 2>&1 | tee macos/.work/package-macos.log
       - name: Keep packaging diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: macos-package-diagnostics-${{ matrix.region }}
-          path: .work/package-macos.log
+          path: macos/.work/package-macos.log
           if-no-files-found: ignore
           retention-days: 14
       - uses: actions/upload-artifact@v4
@@ -105,5 +105,5 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            src-tauri/target
+            macos/src-tauri/target
           key: ${{ steps.cargo-cache.outputs.cache-primary-key }}

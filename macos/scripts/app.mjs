@@ -1,10 +1,25 @@
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getRegionProfile } from './regions.mjs';
 
+// 平台实现都在 macos/ 下，所以这里的一切都相对 macos/ 解析；
+// 仓库根只放跨平台入口与共享产物（dist/、node_modules/），单独算一个 repoRoot。
 const root = fileURLToPath(new URL('../', import.meta.url));
+const repoRoot = path.dirname(root.replace(/[\\/]$/, ''));
+
+/** Tauri CLI 可以装在仓库根（npm ci 惯例）也可以装在 macos/ 下，两处都认。 */
+function resolveTauriCli() {
+  const candidates = [
+    path.join(repoRoot, 'node_modules/@tauri-apps/cli/tauri.js'),
+    path.join(root, 'node_modules/@tauri-apps/cli/tauri.js'),
+  ];
+  const cli = candidates.find(candidate => existsSync(candidate));
+  if (!cli) throw new Error(`未找到 Tauri CLI，请先在仓库根执行 npm ci。已查找：${candidates.join('、')}`);
+  return cli;
+}
 
 export function tauriArguments(action, profile, extra = []) {
   if (action === 'icons') return ['icon', `${profile.frontendDir}/app-icon.png`, '--output', profile.iconsDir, ...extra];
@@ -21,7 +36,7 @@ function run(command, args, environment = process.env) {
 
 async function main([action, ...extra]) {
   const profile = getRegionProfile();
-  const cli = path.join(root, 'node_modules/@tauri-apps/cli/tauri.js');
+  const cli = action === 'test:rust' ? null : resolveTauriCli();
   if (action === 'test:rust') {
     const environment = { ...process.env };
     if (profile.tauriConfig) environment.TAURI_CONFIG = await readFile(path.join(root, profile.tauriConfig), 'utf8');

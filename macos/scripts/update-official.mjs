@@ -7,6 +7,8 @@ import { getRegionProfile } from './regions.mjs';
 import { compareUpstream, discoverUpstream, syncUpstream, validateLock } from './sync-upstream.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+// 仓库根：npm 脚本入口（package.json）与两平台共用的产物目录 dist/ 都在这里。
+const repoRoot = path.dirname(root.replace(/[\\/]$/, ''));
 
 function parseOptions(args) {
   const options = { apply: false, force: false, package: true };
@@ -31,7 +33,7 @@ function parseOptions(args) {
 
 function run(command, args, label) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd: root, stdio: 'inherit', env: process.env });
+    const child = spawn(command, args, { cwd: repoRoot, stdio: 'inherit', env: process.env });
     child.once('error', reject);
     child.once('exit', code => code === 0 ? resolve() : reject(new Error(`${label}失败（退出码 ${code ?? 'unknown'}）`)));
   });
@@ -125,10 +127,10 @@ async function main(args) {
       artifacts: [],
     };
     if (options.package) {
-      const dist = path.join(root, 'dist');
+      const dist = path.join(repoRoot, 'dist');
       for (const extension of ['zip', 'dmg']) {
-        const filename = path.join(dist, `${profile.artifactPrefix}-${JSON.parse(await readFile(path.join(root, 'package.json'))).version}-arm64.${extension}`);
-        if (await exists(filename)) result.artifacts.push({ file: path.relative(root, filename), sha256: await sha256(filename) });
+        const filename = path.join(dist, `${profile.artifactPrefix}-${JSON.parse(await readFile(path.join(repoRoot, 'package.json'))).version}-arm64.${extension}`);
+        if (await exists(filename)) result.artifacts.push({ file: path.relative(repoRoot, filename), sha256: await sha256(filename) });
       }
     }
     await writeFile(path.join(root, '.work', 'official-update-result.json'), `${JSON.stringify(result, null, 2)}\n`);

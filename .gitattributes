@@ -1,0 +1,28 @@
+# 全仓换行符策略
+#
+# 之前只在 windows/ 里锁了换行符，仓库根的 JS / YAML 会被 core.autocrlf 按平台改写：
+# Windows 上检出的 .github/workflows/*.yml 变成 CRLF，测试里那些按 "\n\s+" 断言的规则就白了；
+# 同一份 JS 在两侧 diff 出 4 行假差异，也是这么来的。所以统一在根按 LF 存取。
+#
+# windows/ 下另有 .gitattributes（`* -text`），子目录规则优先，那里的 PowerShell 脚本仍是原样存取。
+* text=auto eol=lf
+
+# 二进制：不做行尾转换，也不当成文本 diff
+*.png binary
+*.icns binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.dmg binary
+*.zip binary
+*.exe binary
+*.dll binary
+*.pyd binary
+*.pdf binary
+*.7z binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary

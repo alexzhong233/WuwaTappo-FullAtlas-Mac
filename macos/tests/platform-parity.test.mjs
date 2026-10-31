@@ -6,7 +6,7 @@
  * 以及 local_atlas_controller 的 request / assetsHost 取值方式。
  *
  * 两处不共用同一份文件，是因为 windows/src 是上游 Averionx/WuwaTappo-FullAtlas
- * 的完整快照（走 tools/patches 的 diff 存档），直接抽公共件会让上游同步失去可比性。
+ * 的完整快照（走 windows/tools/patches 的 diff 存档），直接抽公共件会让上游同步失去可比性。
  * 所以这里改成锁住「差异规模」：谁只改一侧、忘了另一侧，差异行数就会翻倍并在这里失败。
  *
  * 差异上限变化时需要人工确认：是上游升级带来的新分化，还是漏改了。
@@ -16,7 +16,9 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-const root = path.resolve(import.meta.dirname, '..');
+// macos/ 下是 Mac 侧实现，跨平台的对比对象（windows/、package.json）在仓库根。
+const macosRoot = path.resolve(import.meta.dirname, '..');
+const repoRoot = path.resolve(macosRoot, '..');
 const MAC_DIR = 'fullatlas-source';
 const WIN_DIR = 'windows/src/src';
 const MODULES = ['assistant_dashboard.js', 'desktop_assistant.js', 'local_atlas_controller.js'];
@@ -46,8 +48,8 @@ function lineDiff(left, right) {
 
 for (const name of MODULES) {
   test(`${name} 的平台差异不超过 4 行，两侧不会静默分叉`, async () => {
-    const mac = await readFile(path.join(root, MAC_DIR, name), 'utf8');
-    const win = await readFile(path.join(root, WIN_DIR, name), 'utf8');
+    const mac = await readFile(path.join(macosRoot, MAC_DIR, name), 'utf8');
+    const win = await readFile(path.join(repoRoot, WIN_DIR, name), 'utf8');
     const diff = lineDiff(mac, win);
     const preview = diff.map(line => `  ${line.slice(0, 140)}`).join('\n');
     assert.ok(
@@ -59,14 +61,14 @@ for (const name of MODULES) {
 }
 
 test('Mac 侧模块版本号与本仓库 package.json 保持一致', async () => {
-  const pkg = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
-  const source = await readFile(path.join(root, MAC_DIR, 'desktop_assistant.js'), 'utf8');
+  const pkg = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8'));
+  const source = await readFile(path.join(macosRoot, MAC_DIR, 'desktop_assistant.js'), 'utf8');
   const version = /const VERSION='([^']+)'/.exec(source)?.[1];
   assert.equal(version, pkg.version, 'Mac 侧 VERSION 需跟随整合版发版号');
 });
 
 test('Windows 侧模块版本号跟随上游 FullAtlas，不随本仓库发版变动', async () => {
-  const source = await readFile(path.join(root, WIN_DIR, 'desktop_assistant.js'), 'utf8');
+  const source = await readFile(path.join(repoRoot, WIN_DIR, 'desktop_assistant.js'), 'utf8');
   const version = /const VERSION='([^']+)'/.exec(source)?.[1];
   assert.equal(version, '1.2', 'Windows 侧沿用上游 FullAtlas 1.2 的版本号');
 });

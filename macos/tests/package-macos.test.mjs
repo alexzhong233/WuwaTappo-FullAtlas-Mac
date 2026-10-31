@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, truncateSync, symlinkSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, truncateSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -9,6 +9,7 @@ import { getRegionProfile } from '../scripts/regions.mjs';
 
 const script = path.resolve(import.meta.dirname, '../scripts/package-macos.sh');
 const root = path.resolve(import.meta.dirname, '..');
+const repoRoot = path.resolve(root, '..');
 const MIB = 1024 * 1024;
 
 test('packaging exposes explicit application and output paths', () => {
@@ -155,4 +156,34 @@ test('DMG sizing counts symlinks without traversing outside the packaging direct
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+/*
+ * 搬目录时最容易漏的是 bundle.resources：本机构建看不出来，只有 macOS CI 打包或运行期取资源时才炸。
+ * 这里把「配置里写的每个资源都真实存在」变成一次本地可跑的断言，路径改动越界会立刻失败。
+ * ../build/ 下的条目是 npm run setup 生成的产物，未构建时本来就不存在，跳过。
+ */
+test('tauri 配置引用的打包资源都真实存在', () => {
+  const GENERATED = /^\.\.\/build\//;
+  let checked = 0;
+  for (const config of ['src-tauri/tauri.conf.json', 'src-tauri/tauri.global.conf.json']) {
+    const file = path.join(root, config);
+    if (!existsSync(file)) continue;
+    const { bundle = {} } = JSON.parse(readFileSync(file, 'utf8'));
+    for (const [source, target] of Object.entries(bundle.resources ?? {})) {
+      assert.ok(target, `${config} 的资源缺少目标名：${source}`);
+      if (GENERATED.test(source)) continue;
+      const resolved = path.resolve(path.dirname(file), source);
+      assert.ok(existsSync(resolved), `${config} 的 bundle.resources 指向不存在的文件：${source}（解析为 ${resolved}）`);
+      checked += 1;
+    }
+  }
+  assert.ok(checked >= 3, `应至少核对 3 个已入库资源（LICENSE、THIRD_PARTY_NOTICES、FULLATLAS_LICENSE），实际 ${checked} 个`);
+});
+
+test('打包产物默认落在仓库根的 dist/，与 Windows 侧共用同一个交付目录', () => {
+  const source = readFileSync(script, 'utf8');
+  assert.match(source, /^REPO_ROOT="\$\(cd "\$ROOT\/\.\." && pwd\)"$/m);
+  assert.match(source, /^OUTPUT="\$REPO_ROOT\/dist"$/m);
+  assert.ok(existsSync(path.join(repoRoot, 'package.json')), '仓库根应保留 package.json（npm 入口与发版号来源）');
 });

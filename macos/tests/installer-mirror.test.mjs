@@ -9,6 +9,7 @@ import { downloadInstaller, installerMirrorAssetName, installerMirrorUrl, pinned
 import { publishPinnedInstaller } from '../scripts/installer-mirror.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
+const repoRoot = path.resolve(root, '..');
 const bytes = Buffer.from('official installer public fixture');
 const environment = {
   GITHUB_ACTIONS: 'true', GITHUB_SERVER_URL: 'https://github.com', GITHUB_REPOSITORY: 'owner/repo',
@@ -224,11 +225,11 @@ test('first mirror publication creates only a genuinely missing non-latest prere
 });
 
 test('only locked build workflow configures the explicit mirror and syncing publishes verified official inputs', async () => {
-  const build = await readFile(path.join(root, '.github/workflows/build.yml'), 'utf8');
-  const sync = await readFile(path.join(root, '.github/workflows/sync-upstream.yml'), 'utf8');
+  const build = await readFile(path.join(repoRoot, '.github/workflows/build.yml'), 'utf8');
+  const sync = await readFile(path.join(repoRoot, '.github/workflows/sync-upstream.yml'), 'utf8');
   assert.ok(build.includes('WUWA_INSTALLER_MIRROR_BASE: ${{ github.server_url }}/${{ github.repository }}/releases/download/upstream-resources'));
   assert.ok(!sync.includes('WUWA_INSTALLER_MIRROR_BASE:'));
-  assert.match(sync, /Publish verified official installer as an immutable build input\n\s+id: mirror\n\s+if: always\(\) && !cancelled\(\) && steps\.extract\.outcome == 'success'\n\s+run: node scripts\/installer-mirror\.mjs/);
+  assert.match(sync, /Publish verified official installer as an immutable build input\n\s+id: mirror\n\s+if: always\(\) && !cancelled\(\) && steps\.extract\.outcome == 'success'\n\s+run: node macos\/scripts\/installer-mirror\.mjs/);
   assert.ok(sync.indexOf('Publish verified official installer as an immutable build input') > sync.indexOf('Keep upstream review evidence'));
   assert.ok(sync.indexOf('Publish verified official installer as an immutable build input') < sync.indexOf('Open validated update or draft requiring adaptation'));
   assert.ok(sync.includes('MIRROR_OUTCOME: ${{ steps.mirror.outcome }}'));

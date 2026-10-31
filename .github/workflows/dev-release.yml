@@ -51,7 +51,7 @@ jobs:
         run: |
           set -euo pipefail
           VERSION=$(node -p "require('./package.json').version")
-          OFFICIAL=$(node -p "require('./upstream-cn.json').version")
+          OFFICIAL=$(node -p "require('./macos/upstream-cn.json').version")
           OFFICIAL_WIN=$(node -p "require('./windows/upstream-win.json').client_version")
           SHORT_SHA="${HEAD_SHA:0:12}"
           cat > /tmp/dev-release-notes.md <<EOF

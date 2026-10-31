@@ -1,17 +1,7 @@
+# 依赖与两平台共用的产物目录（macOS 与 Windows 都往 dist/ 交付）
 /node_modules/
-/frontend/
-/frontend-global/
-/build/
 /dist/
-/src-tauri/target/
-/src-tauri/icons/
-/src-tauri/icons-global/
-/src-tauri/gen/
 /.work/
-/.cargo-check.log
-/.work-build.log
-/.workflow/
-/work/
 /outputs/
 /release-assets/
 .env
@@ -20,6 +10,20 @@
 *.p12
 *.p8
 .DS_Store
+
+# macOS 侧（源码在 macos/，构建产物与缓存不入库）
+/macos/frontend/
+/macos/frontend-global/
+/macos/build/
+/macos/.work/
+/macos/.cargo-check.log
+/macos/.work-build.log
+/macos/.workflow/
+/macos/work/
+/macos/src-tauri/target/
+/macos/src-tauri/icons/
+/macos/src-tauri/icons-global/
+/macos/src-tauri/gen/
 
 # Windows 侧产物与缓存（源码在 windows/，构建产物不入库）
 /windows/app/

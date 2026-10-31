@@ -7,6 +7,7 @@ import { exactIssueNumber, inventoryChanges, openUpdatePullRequest, reportFailur
 import { getRegionProfile } from '../scripts/regions.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
+const repoRoot = path.resolve(root, '..');
 const inventory = () => ({
   sourceApplication: { region: 'CN', version: '1.0.1', entryModule: 'old.js' },
   runtimeConstants: { clickCacheEnvironment: 'cn-cn-prod' },
@@ -121,12 +122,12 @@ test('failure report execution creates CN issue instead of commenting on a fuzzy
 });
 
 test('sync workflow retains failed validation and creates reviewable drafts only after successful extraction', async () => {
-  const workflow = await readFile(path.join(root, '.github/workflows/sync-upstream.yml'), 'utf8');
+  const workflow = await readFile(path.join(repoRoot, '.github/workflows/sync-upstream.yml'), 'utf8');
   assert.ok(!workflow.includes('continue-on-error'));
   assert.match(workflow, /Open validated update or draft requiring adaptation\n\s+if: always\(\) && !cancelled\(\) && steps\.extract\.outcome == 'success'/);
   assert.match(workflow, /Keep upstream review evidence\n\s+if: always\(\) && steps\.upstream\.outputs\.changed == 'true'/);
   assert.match(workflow, /Report incompatible or unavailable upstream\n\s+if: failure\(\)/);
-  assert.ok(workflow.includes('node scripts/upstream-review.mjs inventory'));
+  assert.ok(workflow.includes('node macos/scripts/upstream-review.mjs inventory'));
   assert.ok(workflow.includes('.work/upstream-review/*.json'));
   assert.match(workflow, /retention-days: 30\n\s+include-hidden-files: true/);
   assert.ok(!workflow.includes('npm run inventory'));

@@ -63,14 +63,14 @@ jobs:
           node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync, existsSync } from 'node:fs';
           const version = JSON.parse(readFileSync('package.json', 'utf8')).version;
-          const official = JSON.parse(readFileSync('upstream-cn.json', 'utf8')).version;
+          const official = JSON.parse(readFileSync('macos/upstream-cn.json', 'utf8')).version;
           if (process.env.TAG !== `v${version}`) throw new Error('Tag does not match integration version');
           for (const ext of ['zip', 'dmg']) {
             if (!existsSync(`dist/WuwaTappo-Full-Community-${version}-arm64.${ext}`)) {
               throw new Error('Release artifact version does not match source');
             }
           }
-          const notes = `docs/RELEASE_NOTES_${version}.md`;
+          const notes = `macos/docs/RELEASE_NOTES_${version}.md`;
           const body = existsSync(notes)
             ? readFileSync(notes, 'utf8')
             : `# WuwaTappo Full Community ${version}\n\n官方国服基底 ${official}，Apple Silicon / macOS 13 及以上。实验预发布，完整业务仍需验收。\n`;
